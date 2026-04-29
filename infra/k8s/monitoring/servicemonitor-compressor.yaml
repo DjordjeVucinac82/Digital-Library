@@ -1,0 +1,27 @@
+# ServiceMonitor — compressor
+#
+# Tells Prometheus to scrape /actuator/prometheus on port 8081 every 30 seconds.
+#
+# Prerequisites:
+#   - micrometer-registry-prometheus dependency in compressor/pom.xml
+#   - management.endpoints.web.exposure.include contains 'prometheus' in application.yml
+#   - kube-prometheus-stack installed with serviceMonitorSelectorNilUsesHelmValues: false
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: compressor
+  namespace: digital-library
+  labels:
+    app: compressor
+spec:
+  selector:
+    matchLabels:
+      app: compressor
+  namespaceSelector:
+    matchNames:
+      - digital-library
+  endpoints:
+    - port: http              # must match name: http in infra/k8s/compressor/service.yaml
+      path: /actuator/prometheus
+      interval: 30s
+      scrapeTimeout: 10s

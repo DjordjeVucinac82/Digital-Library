@@ -10,11 +10,13 @@ spring:
 server:
   port: 8082
 
+# Exposes /actuator/health for ALB health checks, /actuator/metrics for CloudWatch,
+# and /actuator/prometheus for Prometheus scraping (kube-prometheus-stack)
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always

@@ -1,0 +1,27 @@
+# ServiceMonitor — worker
+#
+# Tells Prometheus to scrape /actuator/prometheus on port 8082 every 30 seconds.
+#
+# Prerequisites:
+#   - micrometer-registry-prometheus dependency in worker/pom.xml
+#   - management.endpoints.web.exposure.include contains 'prometheus' in application.yml
+#   - kube-prometheus-stack installed with serviceMonitorSelectorNilUsesHelmValues: false
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: worker
+  namespace: digital-library
+  labels:
+    app: worker
+spec:
+  selector:
+    matchLabels:
+      app: worker
+  namespaceSelector:
+    matchNames:
+      - digital-library
+  endpoints:
+    - port: http              # must match name: http in infra/k8s/worker/service.yaml
+      path: /actuator/prometheus
+      interval: 30s
+      scrapeTimeout: 10s

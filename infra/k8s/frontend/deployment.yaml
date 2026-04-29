@@ -69,3 +69,21 @@ spec:
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 30
+
+        # nginx-prometheus-exporter sidecar — polls /nginx_status and exposes
+        # connection metrics in Prometheus format on port 9113.
+        # Both containers share the pod network namespace, so localhost resolves correctly.
+        - name: nginx-exporter
+          image: nginx/nginx-prometheus-exporter:1.1.0
+          args:
+            - --nginx.scrape-uri=http://localhost/nginx_status
+          ports:
+            - name: metrics
+              containerPort: 9113
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "50m"
+              memory: "32Mi"

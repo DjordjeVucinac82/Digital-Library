@@ -1,0 +1,89 @@
+# kube-prometheus-stack Helm values — Digital Library monitoring
+#
+# Install command (see prod-steps.md step 9.5):
+#
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#
+#   helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring \
+#     --create-namespace \
+#     --values infra/helm/monitoring/values.yaml
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Prometheus
+# ──────────────────────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    # Discover ServiceMonitors in ALL namespaces, not just 'monitoring'.
+    # Without this, Prometheus ignores ServiceMonitors in the digital-library namespace.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+
+    # Keep 15 days of metrics (sufficient for interview demo and general dev use)
+    retention: 15d
+
+    # Persist metrics across pod restarts using a PVC.
+    # EKS provides the gp2 StorageClass by default (backed by AWS EBS).
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Grafana
+# ──────────────────────────────────────────────────────────────────────────────
+grafana:
+  adminPassword: "digital-library-grafana"
+
+  # Persist dashboards and datasources added via the UI across pod restarts
+  persistence:
+    enabled: true
+    storageClassName: gp2
+    size: 1Gi
+
+  # Pre-load the JVM (Micrometer) dashboard from grafana.com at pod startup.
+  # Dashboard 11378 covers: heap memory, GC pause time, HTTP request rate,
+  # active threads, CPU usage — all sourced from micrometer-registry-prometheus.
+  dashboards:
+    default:
+      spring-boot-jvm:
+        gnetId: 11378
+        revision: 20
+        datasource: Prometheus
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: "default"
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Alertmanager — disabled (not needed for this project)
+# ──────────────────────────────────────────────────────────────────────────────
+alertmanager:
+  enabled: false
+
+# ──────────────────────────────────────────────────────────────────────────────
+# node-exporter — DaemonSet that collects CPU, memory, disk, network per node
+# ──────────────────────────────────────────────────────────────────────────────
+nodeExporter:
+  enabled: true
+
+# ──────────────────────────────────────────────────────────────────────────────
+# kube-state-metrics — exposes Deployment, Pod, HPA, PDB state as metrics
+# ──────────────────────────────────────────────────────────────────────────────
+kubeStateMetrics:
+  enabled: true

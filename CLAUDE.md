@@ -32,7 +32,7 @@ Employees → Library Portal (React) → Compressor (Java) → S3 + SQS → Work
 ### Non-functional requirements (from the brief)
 
 - **Infrastructure as Code** — all resources managed via Terraform
-- **Observability** — every service boundary emits logs/metrics via Spring Actuator
+- **Observability** — every service boundary emits logs/metrics via Spring Actuator (`/actuator/prometheus`); Prometheus + Grafana scrape all three services and cluster nodes
 - **Scalability** — cost-effective, scales up/down; 2 replicas per service in K8s
 - **Quality assurance** — unit tests for all business logic
 
@@ -64,8 +64,11 @@ Zuhlke-library/
 │   ├── environments/
 │   │   ├── dev/                # dev tfvars + provider.tf (S3 backend)
 │   │   └── prod/               # prod tfvars + provider.tf (S3 backend)
+│   ├── helm/
+│   │   └── monitoring/         # kube-prometheus-stack Helm values
 │   └── k8s/                    # Kubernetes manifests
 │       ├── namespace.yaml
+│       ├── monitoring/         # ServiceMonitor resources (Prometheus scrape targets)
 │       ├── frontend/           # Deployment, Service, Ingress (ALB)
 │       ├── compressor/         # ServiceAccount (IRSA), ConfigMap, Deployment, Service
 │       └── worker/             # ServiceAccount (IRSA), ConfigMap, Deployment, Service
@@ -146,6 +149,23 @@ kubectl get pods -n digital-library
 kubectl get ingress frontend -n digital-library
 ```
 
+### Monitoring (Prometheus + Grafana)
+```bash
+# Install kube-prometheus-stack (see prod-steps.md step 9.5 for full sequence)
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --values infra/helm/monitoring/values.yaml
+
+# Apply ServiceMonitor resources
+kubectl apply -f infra/k8s/monitoring/
+
+# Access Grafana — http://localhost:3001  (admin / digital-library-grafana)
+kubectl port-forward svc/kube-prometheus-stack-grafana 3001:80 -n monitoring
+
+# Access Prometheus — http://localhost:9090
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+```
+
 ## Architecture Decisions
 
 **Why EKS over ECS Fargate**: EKS gives fine-grained pod placement (frontend in public subnets, backend in private), native Kubernetes ecosystem (Helm, Ingress, IRSA), and is better for interview demonstration of Kubernetes skills. ECS Fargate has lower operational overhead and scales to zero — preferred for a genuine startup; EKS makes sense here for the demo and learning goals.
@@ -169,6 +189,8 @@ kubectl get ingress frontend -n digital-library
 **DB password in Secrets Manager**: Terraform generates a random password, stores it in Secrets Manager, and passes it to RDS. INSTRUCTIONS.md step 8 documents pulling the secret to create the K8s Secret. For production, use External Secrets Operator to automate this sync.
 
 **Multi-stage Dockerfiles**: dependency layer cached separately from source — faster CI rebuilds when only source changes.
+
+**Prometheus + Grafana via kube-prometheus-stack**: The `prometheus-community/kube-prometheus-stack` Helm chart installs Prometheus, Grafana, node-exporter, and kube-state-metrics in one release (namespace: `monitoring`). Spring Boot services expose `/actuator/prometheus` via `micrometer-registry-prometheus` (Spring Boot BOM manages the version). The frontend uses an `nginx/nginx-prometheus-exporter:1.1.0` sidecar that polls nginx `stub_status` on `http://localhost/nginx_status` and re-exposes the data in Prometheus format on port 9113. `serviceMonitorSelectorNilUsesHelmValues: false` in `values.yaml` is the key setting — it allows Prometheus to discover ServiceMonitor resources in the `digital-library` namespace (not just `monitoring`). Access is via `kubectl port-forward` only — no public Ingress is created for monitoring. The Grafana JVM dashboard (ID 11378) is pre-loaded via `values.yaml`.
 
 ## The 3 Interview Deliverables
 

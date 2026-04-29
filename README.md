@@ -108,7 +108,7 @@ Promotion path: `dev` → `prod` (Terraform applied manually per environment; `t
 ## Non-Functional Requirements
 
 - **IaC** — all infrastructure managed via Terraform; remote state in S3 + DynamoDB lock
-- **Observability** — Spring Actuator `/health` and `/metrics` on every service; logs to CloudWatch
+- **Observability** — Spring Actuator `/health`, `/metrics`, and `/actuator/prometheus` on every service; Prometheus + Grafana via `kube-prometheus-stack` (JVM dashboard pre-loaded, node CPU/memory via node-exporter); logs to CloudWatch
 - **Scalability** — HPA (CPU-based) for frontend + compressor; KEDA SQS scaler for worker; Cluster Autoscaler for nodes; PodDisruptionBudgets (minAvailable=1) on all services
 - **Security** — IRSA (IAM Roles for Service Accounts); short-lived credentials, never stored in K8s Secrets; DB password in Secrets Manager
 - **Cost** — dev/test use Spot instances + single NAT Gateway (~$72/month per EKS control plane); prod uses on-demand + Multi-AZ

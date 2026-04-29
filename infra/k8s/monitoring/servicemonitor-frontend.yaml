@@ -1,0 +1,28 @@
+# ServiceMonitor — frontend (nginx-prometheus-exporter sidecar)
+#
+# Scrapes nginx connection metrics exposed on port 9113 by the nginx-exporter
+# sidecar in the frontend pod. The sidecar polls nginx /nginx_status internally.
+#
+# Prerequisites:
+#   - /nginx_status stub_status location in frontend/nginx.conf
+#   - nginx-exporter sidecar container in infra/k8s/frontend/deployment.yaml
+#   - metrics port 9113 added to infra/k8s/frontend/service.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: frontend
+  namespace: digital-library
+  labels:
+    app: frontend
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  namespaceSelector:
+    matchNames:
+      - digital-library
+  endpoints:
+    - port: metrics           # must match name: metrics added to infra/k8s/frontend/service.yaml
+      path: /metrics          # nginx-prometheus-exporter default metrics path
+      interval: 30s
+      scrapeTimeout: 10s

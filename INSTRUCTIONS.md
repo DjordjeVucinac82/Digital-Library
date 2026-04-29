@@ -334,6 +334,52 @@ kubectl rollout status deployment/keda-operator -n keda --timeout=120s
 
 ---
 
+## 9.5. Install Monitoring Stack (Prometheus + Grafana)
+
+Deploys `kube-prometheus-stack` into a dedicated `monitoring` namespace. Installs:
+- **Prometheus** — scrapes metrics from all 3 application services and cluster nodes
+- **Grafana** — pre-loaded Spring Boot JVM dashboard (ID 11378) + node CPU/memory dashboards
+- **node-exporter** — DaemonSet providing host-level CPU, memory, disk metrics per EKS node
+- **kube-state-metrics** — Deployment, Pod, HPA, PDB state metrics
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace \
+  --values infra/helm/monitoring/values.yaml
+
+kubectl rollout status deployment/kube-prometheus-stack-grafana -n monitoring --timeout=180s
+kubectl rollout status statefulset/prometheus-kube-prometheus-stack-prometheus -n monitoring --timeout=300s
+```
+
+Apply the ServiceMonitor resources (tell Prometheus which app services to scrape):
+
+```bash
+kubectl apply -f infra/k8s/monitoring/
+```
+
+Access Grafana and Prometheus locally via port-forward:
+
+```bash
+# Grafana — http://localhost:3001  (login: admin / digital-library-grafana)
+kubectl port-forward svc/kube-prometheus-stack-grafana 3001:80 -n monitoring
+
+# Prometheus — http://localhost:9090
+kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
+```
+
+Verify all three app targets appear as UP in Prometheus at http://localhost:9090/targets
+under `serviceMonitor/digital-library/compressor`, `worker`, and `frontend`.
+
+> **How scraping works:** `serviceMonitorSelectorNilUsesHelmValues: false` in `values.yaml`
+> tells Prometheus to discover ServiceMonitors in all namespaces. The three ServiceMonitor
+> resources in `infra/k8s/monitoring/` point Prometheus at the correct service ports and paths.
+
+---
+
 ## 10. Create Kubernetes Namespace and Secrets
 
 ### Create namespace
@@ -670,16 +716,18 @@ kubectl delete -f infra/k8s/namespace.yaml
 sleep 60
 
 # Step 2: Uninstall Helm releases
-# Order matters: KEDA first (stops ScaledObject reconciliation), then external-dns
-# (stops Route 53 updates), then LB controller, then metrics/autoscaler
-helm uninstall keda -n keda
-helm uninstall external-dns -n kube-system
-helm uninstall aws-load-balancer-controller -n kube-system
-helm uninstall cluster-autoscaler -n kube-system
-helm uninstall metrics-server -n kube-system
+# Order matters: KEDA first (stops ScaledObject reconciliation), then monitoring,
+# then external-dns (stops Route 53 updates), then LB controller, then metrics/autoscaler
+helm uninstall keda                          -n keda
+helm uninstall kube-prometheus-stack         -n monitoring
+helm uninstall external-dns                  -n kube-system
+helm uninstall aws-load-balancer-controller  -n kube-system
+helm uninstall cluster-autoscaler            -n kube-system
+helm uninstall metrics-server                -n kube-system
 
-# Remove the KEDA namespace (chart does not delete it automatically)
+# Remove namespaces (charts do not delete them automatically)
 kubectl delete namespace keda
+kubectl delete namespace monitoring
 
 # Step 3: Destroy the Terraform infrastructure
 cd infra/environments/dev
