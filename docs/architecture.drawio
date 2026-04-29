@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxGraphModel dx="1654" dy="1169" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+
+    <!-- ===== CI/CD Row ===== -->
+    <mxCell id="10" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br&gt;CI/CD Pipeline&lt;br&gt;(build + test + deploy)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontColor=#333333;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="40" y="30" width="165" height="75" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="11" value="&lt;b&gt;Amazon ECR&lt;/b&gt;&lt;br&gt;Container Registry&lt;br&gt;frontend / compressor / worker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="690" y="30" width="200" height="75" as="geometry"/>
+    </mxCell>
+
+    <!-- ===== External: Users + DNS + ALB ===== -->
+    <mxCell id="20" value="&lt;b&gt;Employees&lt;/b&gt;&lt;br&gt;Web Browser" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="40" y="370" width="120" height="70" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="21" value="&lt;b&gt;Route 53&lt;/b&gt;&lt;br&gt;444noresponse.com" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="210" y="355" width="140" height="55" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="22" value="&lt;b&gt;ACM&lt;/b&gt;&lt;br&gt;TLS Certificate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="210" y="425" width="140" height="45" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="23" value="&lt;b&gt;ALB&lt;/b&gt;&lt;br&gt;Application Load Balancer&lt;br&gt;HTTP → HTTPS redirect" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#9C27B0;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="395" y="355" width="160" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- ===== VPC Container ===== -->
+    <mxCell id="30" value="&lt;b&gt;AWS VPC  (10.1.0.0/16)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF7FF;strokeColor=#0073BB;verticalAlign=top;fontSize=13;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
+      <mxGeometry x="595" y="155" width="1010" height="870" as="geometry"/>
+    </mxCell>
+
+    <!-- Public Subnets -->
+    <mxCell id="31" value="&lt;b&gt;Public Subnets&lt;/b&gt;&lt;br&gt;eu-central-1a + 1b" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;verticalAlign=top;fontSize=11;fontStyle=1;dashed=1;" vertex="1" parent="1">
+      <mxGeometry x="615" y="200" width="220" height="790" as="geometry"/>
+    </mxCell>
+
+    <!-- Private Subnets -->
+    <mxCell id="32" value="&lt;b&gt;Private Subnets&lt;/b&gt;&lt;br&gt;eu-central-1a + 1b" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F5A623;verticalAlign=top;fontSize=11;fontStyle=1;dashed=1;" vertex="1" parent="1">
+      <mxGeometry x="855" y="200" width="730" height="790" as="geometry"/>
+    </mxCell>
+
+    <!-- Internet Gateway -->
+    <mxCell id="33" value="&lt;b&gt;Internet Gateway&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="635" y="235" width="160" height="45" as="geometry"/>
+    </mxCell>
+
+    <!-- NAT Gateway -->
+    <mxCell id="34" value="&lt;b&gt;NAT Gateway&lt;/b&gt;&lt;br&gt;(outbound for private pods)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="635" y="850" width="165" height="60" as="geometry"/>
+    </mxCell>
+
+    <!-- Frontend Pod -->
+    <mxCell id="35" value="&lt;b&gt;Frontend Pod&lt;/b&gt;&lt;br&gt;nginx + React SPA&lt;br&gt;Port: 80&lt;br&gt;Proxies /api/* → compressor&lt;br&gt;&lt;i&gt;HPA: CPU 70% | min=2 max=4&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#3B82F6;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="625" y="400" width="190" height="125" as="geometry"/>
+    </mxCell>
+
+    <!-- Compressor Pod -->
+    <mxCell id="36" value="&lt;b&gt;Compressor Pod&lt;/b&gt;&lt;br&gt;Spring Boot :8081&lt;br&gt;① Gzip-compress PDF&lt;br&gt;② Upload bytes to S3&lt;br&gt;③ Send S3 key to SQS&lt;br&gt;&lt;i&gt;HPA: CPU 70% | min=2 max=4&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#3B82F6;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="875" y="300" width="200" height="165" as="geometry"/>
+    </mxCell>
+
+    <!-- Worker Pod -->
+    <mxCell id="37" value="&lt;b&gt;Worker Pod&lt;/b&gt;&lt;br&gt;Spring Boot :8082&lt;br&gt;① Receive S3 key from SQS&lt;br&gt;② Download bytes from S3&lt;br&gt;③ Persist to RDS MySQL&lt;br&gt;④ Delete from S3&lt;br&gt;&lt;i&gt;KEDA: SQS queue depth&lt;/i&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DBEAFE;strokeColor=#3B82F6;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="1200" y="280" width="200" height="200" as="geometry"/>
+    </mxCell>
+
+    <!-- SQS Queue -->
+    <mxCell id="38" value="&lt;b&gt;SQS Queue&lt;/b&gt;&lt;br&gt;digital-library-books&lt;br&gt;256 KB limit → S3 key only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#E91E63;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="1065" y="290" width="165" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- SQS DLQ -->
+    <mxCell id="39" value="&lt;b&gt;SQS DLQ&lt;/b&gt;&lt;br&gt;Dead Letter Queue&lt;br&gt;(after 3 retries)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#E91E63;fontSize=11;dashed=1;" vertex="1" parent="1">
+      <mxGeometry x="1065" y="395" width="165" height="65" as="geometry"/>
+    </mxCell>
+
+    <!-- S3 Bucket -->
+    <mxCell id="40" value="&lt;b&gt;S3 Bucket&lt;/b&gt;&lt;br&gt;digital-library-books-prod-&lt;br&gt;646485834024&lt;br&gt;Transient | 1-day TTL | AES-256" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#4CAF50;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="1040" y="590" width="185" height="100" as="geometry"/>
+    </mxCell>
+
+    <!-- RDS MySQL -->
+    <mxCell id="41" value="&lt;b&gt;RDS MySQL 8.0&lt;/b&gt;&lt;br&gt;db.t3.medium&lt;br&gt;Multi-AZ (prod)&lt;br&gt;Encrypted at rest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="1250" y="590" width="165" height="100" as="geometry"/>
+    </mxCell>
+
+    <!-- Secrets Manager -->
+    <mxCell id="42" value="&lt;b&gt;Secrets Manager&lt;/b&gt;&lt;br&gt;RDS password&lt;br&gt;(auto-generated by TF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#F44336;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="1445" y="590" width="150" height="80" as="geometry"/>
+    </mxCell>
+
+    <!-- K8s System Controllers -->
+    <mxCell id="43" value="&lt;b&gt;K8s System Controllers&lt;/b&gt;&lt;br&gt;• AWS LB Controller (Ingress → ALB)&lt;br&gt;• Cluster Autoscaler (ASG)&lt;br&gt;• KEDA operator (SQS scaler)&lt;br&gt;• external-dns (Route 53 sync)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#9E9E9E;fontSize=10;verticalAlign=top;" vertex="1" parent="1">
+      <mxGeometry x="875" y="790" width="215" height="120" as="geometry"/>
+    </mxCell>
+
+    <!-- IRSA Badges -->
+    <mxCell id="44" value="&lt;b&gt;IRSA&lt;/b&gt;: SQS SendMessage&lt;br&gt;S3 PutObject (books/*)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFDE7;strokeColor=#FFC107;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="875" y="480" width="175" height="40" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="45" value="&lt;b&gt;IRSA&lt;/b&gt;: SQS ReceiveMessage&lt;br&gt;S3 GetObject + DeleteObject" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFDE7;strokeColor=#FFC107;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="1200" y="490" width="175" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- ===== ARROWS ===== -->
+
+    <!-- GitHub Actions → ECR -->
+    <mxCell id="100" value="docker push :latest" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" edge="1" source="10" target="11" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- ECR → pods (dashed pull) -->
+    <mxCell id="101" value="pull on restart" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#FF9800;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" source="11" target="35" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="102" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#FF9800;" edge="1" source="11" target="36" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="103" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#FF9800;" edge="1" source="11" target="37" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- User → Route53 → ALB → Frontend -->
+    <mxCell id="104" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" edge="1" source="20" target="21" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="105" value="A ALIAS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" edge="1" source="21" target="23" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="106" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" source="23" target="35" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Frontend → Compressor -->
+    <mxCell id="107" value="REST /api/*" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;" edge="1" source="35" target="36" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Compressor → S3 (upload) -->
+    <mxCell id="108" value="② upload .gz" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;strokeColor=#4CAF50;fontColor=#2E7D32;" edge="1" source="36" target="40" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Compressor → SQS (send key) -->
+    <mxCell id="109" value="③ S3 key" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;strokeColor=#E91E63;fontColor=#C2185B;" edge="1" source="36" target="38" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- SQS → Worker (receive) -->
+    <mxCell id="110" value="① receive key" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;strokeColor=#E91E63;fontColor=#C2185B;" edge="1" source="38" target="37" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Worker → S3 (download + delete) -->
+    <mxCell id="111" value="② download + delete" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;strokeColor=#4CAF50;fontColor=#2E7D32;" edge="1" source="37" target="40" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Worker → RDS -->
+    <mxCell id="112" value="③ persist binary" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=10;strokeColor=#1565C0;fontColor=#1565C0;" edge="1" source="37" target="41" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Worker → Secrets Manager -->
+    <mxCell id="113" value="read DB secret" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#F44336;" edge="1" source="37" target="42" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- SQS → DLQ -->
+    <mxCell id="114" value="failed msgs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;" edge="1" source="38" target="39" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Private pods → NAT GW (outbound) -->
+    <mxCell id="115" value="outbound (ECR pull)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#9E9E9E;" edge="1" source="36" target="34" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+  </root>
+</mxGraphModel>

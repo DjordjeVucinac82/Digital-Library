@@ -21,7 +21,8 @@ infra/**/*.tfstate.backup
 infra/**/.terraform.lock.hcl
 infra/**/*.tfvars
 !infra/**/terraform.tfvars.example
-
+infra/environments/prod/.tfplan
+infra/bootstrap/.tfplan
 # IDE
 .idea/
 *.iml
