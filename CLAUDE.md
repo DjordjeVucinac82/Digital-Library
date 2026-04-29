@@ -24,10 +24,12 @@ Employees → Library Portal (React) → Compressor (Java) → Message Broker �
 
 ### Non-functional requirements (from the brief)
 
-- Infrastructure as Code is mandatory
-- Observable at every service boundary
-- Auto-scaling: scale up under load, scale down when idle — cost-effectively
-- Quality assurance is business critical
+- **Infrastructure as Code** is a de facto standard — all resources must be managed via IaC (Terraform)
+- **Observability** — systems should be observable at every handshake (every service boundary must emit logs/metrics/traces)
+- **Scalability** is part of the business model:
+  - Solution must be cost effective
+  - Infrastructure should scale up during high volumes and scale down during low volumes, and be performant while doing so
+- **Quality assurance** is business critical
 
 ## Repository Structure
 
