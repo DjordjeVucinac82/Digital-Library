@@ -1,0 +1,102 @@
+name: CD — Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main   # deploys to dev/test automatically
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: dev
+        type: choice
+        options: [dev, test, prod]
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.eu-west-1.amazonaws.com
+
+jobs:
+
+  build-and-push:
+    name: Build Docker images & push to ECR
+    runs-on: ubuntu-latest
+    outputs:
+      compressor_tag: ${{ steps.meta.outputs.compressor_tag }}
+      worker_tag: ${{ steps.meta.outputs.worker_tag }}
+      frontend_tag: ${{ steps.meta.outputs.frontend_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: meta
+        run: |
+          TAG=${{ github.sha }}
+          echo "compressor_tag=${{ env.ECR_REGISTRY }}/compressor:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "worker_tag=${{ env.ECR_REGISTRY }}/worker:${TAG}" >> "$GITHUB_OUTPUT"
+          echo "frontend_tag=${{ env.ECR_REGISTRY }}/frontend:${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push compressor
+        uses: docker/build-push-action@v5
+        with:
+          context: ./compressor
+          push: true
+          tags: ${{ steps.meta.outputs.compressor_tag }}
+
+      - name: Build and push worker
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          push: true
+          tags: ${{ steps.meta.outputs.worker_tag }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ steps.meta.outputs.frontend_tag }}
+
+  deploy:
+    name: Deploy to ECS Fargate (${{ github.event.inputs.environment || 'dev' }})
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy compressor to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: infra/environments/${{ github.event.inputs.environment || 'dev' }}/compressor-task-def.json
+          service: compressor
+          cluster: digital-library-${{ github.event.inputs.environment || 'dev' }}
+          wait-for-service-stability: true
+
+      - name: Deploy worker to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: infra/environments/${{ github.event.inputs.environment || 'dev' }}/worker-task-def.json
+          service: worker
+          cluster: digital-library-${{ github.event.inputs.environment || 'dev' }}
+          wait-for-service-stability: true
