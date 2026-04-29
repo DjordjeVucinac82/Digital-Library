@@ -100,6 +100,12 @@ npm run build                      # production build to dist/
 2. **Environment model** — how dev/test/prod are separated (AWS accounts vs VPCs)
 3. **CI/CD pipeline** — tool choices, promotion strategy, quality gates, rollback
 
+## AWS Credentials
+
+**Local development**: uses the `Digital-Library` profile from `~/.aws/credentials`. Terraform picks this up automatically via `provider.tf`. AWS CLI commands should use `--profile Digital-Library` or `export AWS_PROFILE=Digital-Library`.
+
+**CI/CD (GitHub Actions)**: uses IAM credentials injected as environment variables — these override the profile in `provider.tf`.
+
 ## CI/CD Secrets Required (GitHub → Settings → Secrets)
 
 | Secret | Value |
