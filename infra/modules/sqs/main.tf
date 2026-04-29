@@ -38,6 +38,6 @@ resource "aws_sqs_queue" "main" {
   tags = {
     Name        = local.queue_name
     Environment = var.environment
-    Purpose     = "Books compressed queue — compressor → worker"
+    Purpose     = "Books compressed queue - compressor to worker"
   }
 }

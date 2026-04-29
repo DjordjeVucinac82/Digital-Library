@@ -44,6 +44,7 @@ APP_DOMAIN="444noresponse.com"
 
 echo "→ Rendering manifests to ${RENDERED_DIR} ..."
 rm -rf "${RENDERED_DIR}"
+mkdir -p "$(dirname "${RENDERED_DIR}")"
 cp -r "${SOURCE_DIR}" "${RENDERED_DIR}"
 
 # macOS-compatible in-place sed (BSD sed requires an explicit backup suffix with -i)

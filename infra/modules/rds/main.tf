@@ -87,7 +87,7 @@ resource "aws_security_group" "rds" {
 
 resource "aws_db_subnet_group" "main" {
   name        = "${var.environment}-rds-subnet-group"
-  description = "Private subnets for RDS MySQL — ${var.environment}"
+  description = "Private subnets for RDS MySQL - ${var.environment}"
   subnet_ids  = var.private_subnet_ids
 
   tags = {

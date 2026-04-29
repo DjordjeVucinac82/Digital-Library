@@ -8,6 +8,7 @@ terraform {
     region         = "eu-central-1"
     dynamodb_table = "terraform-locks"
     encrypt        = true
+    profile        = "Digital-Library"
   }
 
   required_providers {

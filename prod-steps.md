@@ -30,6 +30,7 @@ aws sts get-caller-identity --profile Digital-Library
 ```bash
 cd infra/bootstrap
 terraform init
+terraform plan -out=.tfplan
 terraform apply
 ```
 
@@ -42,7 +43,7 @@ terraform apply
 ```bash
 cd infra/environments/prod
 terraform init
-terraform plan
+terraform plan -out=.tfplan
 terraform apply      # ~15 min — EKS cluster takes longest
 terraform output     # save these values, needed in later steps
 ```
@@ -60,15 +61,15 @@ IMAGE_TAG=$(git rev-parse --short HEAD)
 aws ecr get-login-password --region eu-central-1 --profile Digital-Library \
   | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-# Build
-docker build -t ${ECR_REGISTRY}/digital-library-prod/frontend:${IMAGE_TAG}   ./frontend
-docker build -t ${ECR_REGISTRY}/digital-library-prod/compressor:${IMAGE_TAG} ./compressor
-docker build -t ${ECR_REGISTRY}/digital-library-prod/worker:${IMAGE_TAG}     ./worker
+# Build and push (--platform linux/amd64 targets EKS nodes; buildx --push skips a separate push step)
+docker buildx build --platform linux/amd64 --push \
+  -t ${ECR_REGISTRY}/digital-library/frontend:${IMAGE_TAG}   ./frontend
 
-# Push
-docker push ${ECR_REGISTRY}/digital-library-prod/frontend:${IMAGE_TAG}
-docker push ${ECR_REGISTRY}/digital-library-prod/compressor:${IMAGE_TAG}
-docker push ${ECR_REGISTRY}/digital-library-prod/worker:${IMAGE_TAG}
+docker buildx build --platform linux/amd64 --push \
+  -t ${ECR_REGISTRY}/digital-library/compressor:${IMAGE_TAG} ./compressor
+
+docker buildx build --platform linux/amd64 --push \
+  -t ${ECR_REGISTRY}/digital-library/worker:${IMAGE_TAG}     ./worker
 ```
 
 ---
@@ -145,7 +146,7 @@ helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/ &
 
 helm install metrics-server metrics-server/metrics-server \
   --namespace kube-system \
-  --set args[0]="--kubelet-insecure-tls"
+  --set 'args[0]=--kubelet-insecure-tls'
 
 kubectl rollout status deployment/metrics-server -n kube-system --timeout=120s
 kubectl top nodes   # verify after ~60s
@@ -164,11 +165,12 @@ helm install cluster-autoscaler autoscaler/cluster-autoscaler \
   --set autoDiscovery.clusterName=${CLUSTER_NAME} \
   --set awsRegion=eu-central-1 \
   --set rbac.serviceAccount.name=cluster-autoscaler \
-  --set rbac.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=${CA_IRSA} \
+  --set 'rbac.serviceAccount.annotations.eks\.amazonaws\.com/role-arn'=${CA_IRSA} \
   --set extraArgs.balance-similar-node-groups=true \
-  --set extraArgs.skip-nodes-with-system-pods=false
+  --set extraArgs.skip-nodes-with-system-pods=false \
+  --set image.tag=v1.31.0
 
-kubectl rollout status deployment/cluster-autoscaler -n kube-system --timeout=120s
+kubectl rollout status deployment/cluster-autoscaler-aws-cluster-autoscaler -n kube-system --timeout=120s
 ```
 
 ### KEDA (scales worker by SQS queue depth)

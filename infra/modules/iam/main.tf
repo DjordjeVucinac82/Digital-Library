@@ -70,7 +70,7 @@ resource "aws_iam_role" "compressor_irsa" {
       Condition = {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
-          "${local.oidc_url}:sub" = "system:serviceaccounts:digital-library:compressor"
+          "${local.oidc_url}:sub" = "system:serviceaccount:digital-library:compressor"
         }
       }
     }]
@@ -120,7 +120,7 @@ resource "aws_iam_role" "worker_irsa" {
       Condition = {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
-          "${local.oidc_url}:sub" = "system:serviceaccounts:digital-library:worker"
+          "${local.oidc_url}:sub" = "system:serviceaccount:digital-library:worker"
         }
       }
     }]
@@ -194,7 +194,7 @@ resource "aws_iam_role" "lb_controller_irsa" {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
           # The LB Controller runs in kube-system namespace
-          "${local.oidc_url}:sub" = "system:serviceaccounts:kube-system:aws-load-balancer-controller"
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
         }
       }
     }]
@@ -235,7 +235,7 @@ resource "aws_iam_role" "external_dns_irsa" {
       Condition = {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
-          "${local.oidc_url}:sub" = "system:serviceaccounts:kube-system:external-dns"
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:external-dns"
         }
       }
     }]
@@ -300,7 +300,7 @@ resource "aws_iam_role" "cluster_autoscaler_irsa" {
       Condition = {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
-          "${local.oidc_url}:sub" = "system:serviceaccounts:kube-system:cluster-autoscaler"
+          "${local.oidc_url}:sub" = "system:serviceaccount:kube-system:cluster-autoscaler"
         }
       }
     }]
@@ -378,7 +378,7 @@ resource "aws_iam_role" "keda_operator_irsa" {
       Condition = {
         StringEquals = {
           "${local.oidc_url}:aud" = "sts.amazonaws.com"
-          "${local.oidc_url}:sub" = "system:serviceaccounts:keda:keda-operator"
+          "${local.oidc_url}:sub" = "system:serviceaccount:keda:keda-operator"
         }
       }
     }]

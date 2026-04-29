@@ -41,6 +41,12 @@
             <artifactId>spring-cloud-aws-starter-sqs</artifactId>
         </dependency>
 
+        <!-- Required for IRSA (WebIdentityTokenCredentialsProvider) on EKS -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sts</artifactId>
+        </dependency>
+
         <!-- RabbitMQ consumer (active in 'local' Spring profile — docker-compose) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
