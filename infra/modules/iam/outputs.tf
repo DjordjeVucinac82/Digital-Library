@@ -22,3 +22,13 @@ output "external_dns_irsa_arn" {
   description = "ARN of the external-dns IRSA role — used in the Helm values for external-dns"
   value       = aws_iam_role.external_dns_irsa.arn
 }
+
+output "cluster_autoscaler_irsa_arn" {
+  description = "ARN of the Cluster Autoscaler IRSA role — used in the Helm values for cluster-autoscaler"
+  value       = aws_iam_role.cluster_autoscaler_irsa.arn
+}
+
+output "keda_operator_irsa_arn" {
+  description = "ARN of the KEDA operator IRSA role — used in the Helm values for KEDA"
+  value       = aws_iam_role.keda_operator_irsa.arn
+}

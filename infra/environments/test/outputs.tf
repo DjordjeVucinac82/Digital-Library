@@ -62,6 +62,6 @@ output "keda_operator_irsa_arn" {
 }
 
 output "certificate_arn" {
-  description = "ACM certificate ARN for dev.444noresponse.com — annotate on the frontend Ingress"
+  description = "ACM certificate ARN for test.444noresponse.com — annotate on the frontend Ingress"
   value       = module.acm.certificate_arn
 }

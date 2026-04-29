@@ -14,7 +14,7 @@ metadata:
   labels:
     app: worker
 spec:
-  replicas: 2
+  # replicas is intentionally omitted — managed by the KEDA ScaledObject (scaledobject.yaml)
   selector:
     matchLabels:
       app: worker

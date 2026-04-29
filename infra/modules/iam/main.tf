@@ -275,3 +275,136 @@ resource "aws_iam_role_policy_attachment" "external_dns" {
   role       = aws_iam_role.external_dns_irsa.name
   policy_arn = aws_iam_policy.external_dns.arn
 }
+
+# ─── IRSA: Cluster Autoscaler ─────────────────────────────────────────────────
+
+# Cluster Autoscaler runs in kube-system and adjusts the two EKS managed node
+# group ASGs in response to Pending pods or underutilised nodes.
+#
+# Mutating actions (SetDesiredCapacity, TerminateInstance) are scoped via a
+# condition tag — the autoscaler can only resize ASGs it owns (tagged in eks/main.tf).
+# AWS does not support resource-level restrictions on Describe calls, so those
+# actions must remain on Resource "*".
+
+resource "aws_iam_role" "cluster_autoscaler_irsa" {
+  name = "${var.cluster_name}-cluster-autoscaler-irsa"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = var.oidc_provider_arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+          "${local.oidc_url}:sub" = "system:serviceaccounts:kube-system:cluster-autoscaler"
+        }
+      }
+    }]
+  })
+
+  tags = { Environment = var.environment }
+}
+
+resource "aws_iam_policy" "cluster_autoscaler" {
+  name        = "${var.cluster_name}-cluster-autoscaler"
+  description = "Allow Cluster Autoscaler to discover and resize EKS managed node group ASGs"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # Mutating actions scoped to ASGs tagged as owned by this cluster
+        Effect = "Allow"
+        Action = [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+          }
+        }
+      },
+      {
+        # Read-only discovery — AWS does not support resource-level restrictions here
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstanceTypes",
+          "ec2:GetInstanceTypesFromInstanceRequirements",
+          "ec2:DescribeAvailabilityZones"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cluster_autoscaler" {
+  role       = aws_iam_role.cluster_autoscaler_irsa.name
+  policy_arn = aws_iam_policy.cluster_autoscaler.arn
+}
+
+# ─── IRSA: KEDA Operator ──────────────────────────────────────────────────────
+
+# KEDA's operator pod reads SQS queue depth to drive worker pod scaling.
+# It needs only read access — no ability to send, receive, or delete messages.
+#
+# The operator SA is created by the KEDA Helm chart in the keda namespace.
+# Setting identityOwner=operator in the ScaledObject tells KEDA to use this
+# role directly — no TriggerAuthentication resource is required.
+
+resource "aws_iam_role" "keda_operator_irsa" {
+  name = "${var.cluster_name}-keda-operator-irsa"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = var.oidc_provider_arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_url}:aud" = "sts.amazonaws.com"
+          "${local.oidc_url}:sub" = "system:serviceaccounts:keda:keda-operator"
+        }
+      }
+    }]
+  })
+
+  tags = { Environment = var.environment }
+}
+
+resource "aws_iam_policy" "keda_operator_sqs" {
+  name        = "${var.cluster_name}-keda-operator-sqs"
+  description = "Allow KEDA operator to read SQS queue depth for worker autoscaling"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl"
+      ]
+      Resource = var.sqs_queue_arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "keda_operator_sqs" {
+  role       = aws_iam_role.keda_operator_irsa.name
+  policy_arn = aws_iam_policy.keda_operator_sqs.arn
+}

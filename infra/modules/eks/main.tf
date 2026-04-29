@@ -120,6 +120,15 @@ resource "aws_eks_node_group" "frontend" {
   tags = {
     Name        = "${var.cluster_name}-frontend"
     Environment = var.environment
+
+    # Cluster Autoscaler discovers node groups via these tags
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  }
+
+  # Cluster Autoscaler owns DesiredCapacity at runtime — Terraform must not reset it
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
   }
 
   depends_on = [aws_eks_cluster.main]
@@ -150,6 +159,14 @@ resource "aws_eks_node_group" "backend" {
   tags = {
     Name        = "${var.cluster_name}-backend"
     Environment = var.environment
+
+    # Cluster Autoscaler discovers node groups via these tags
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  }
+
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
   }
 
   depends_on = [aws_eks_cluster.main]

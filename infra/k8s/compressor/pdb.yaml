@@ -1,0 +1,15 @@
+# PodDisruptionBudget for the compressor deployment.
+#
+# Ensures at least 1 compressor pod remains available during node maintenance
+# or Cluster Autoscaler scale-in. Without this, a node drain could take down
+# both compressor pods simultaneously, causing upload failures (503) for users.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: compressor
+  namespace: digital-library
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: compressor

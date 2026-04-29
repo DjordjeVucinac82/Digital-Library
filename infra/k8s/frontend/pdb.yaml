@@ -1,0 +1,18 @@
+# PodDisruptionBudget for the frontend deployment.
+#
+# Guarantees at least 1 frontend pod remains available during voluntary
+# disruptions: node drains, Cluster Autoscaler scale-in, rolling K8s upgrades.
+#
+# With HPA minReplicas=2, one pod can always be disrupted safely. This PDB
+# prevents the Cluster Autoscaler from evicting both pods simultaneously when
+# trying to consolidate two underutilised nodes.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend
+  namespace: digital-library
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend

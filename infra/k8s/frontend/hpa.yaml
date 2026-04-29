@@ -1,0 +1,31 @@
+# HorizontalPodAutoscaler for the frontend (nginx/React) deployment.
+#
+# Scales pods when average CPU utilization exceeds 70%.
+# The Metrics Server (installed in step 9) supplies the CPU metrics via the
+# Kubernetes Metrics API.
+#
+# minReplicas=2: the podAntiAffinity rule (requiredDuring) spreads pods across
+# nodes. Keeping 2 pods guarantees HA — if one node fails, the other pod keeps
+# the frontend available. Scaling below 2 would lose that guarantee.
+#
+# maxReplicas=4: matches the node group max_size so the Cluster Autoscaler
+# never needs to provision more nodes than the limit allows.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: frontend
+  namespace: digital-library
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: frontend
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

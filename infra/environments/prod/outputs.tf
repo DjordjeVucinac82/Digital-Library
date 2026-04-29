@@ -39,6 +39,16 @@ output "external_dns_irsa_arn" {
   value       = module.iam.external_dns_irsa_arn
 }
 
+output "cluster_autoscaler_irsa_arn" {
+  description = "ARN for the Cluster Autoscaler Helm values"
+  value       = module.iam.cluster_autoscaler_irsa_arn
+}
+
+output "keda_operator_irsa_arn" {
+  description = "ARN for the KEDA operator Helm values"
+  value       = module.iam.keda_operator_irsa_arn
+}
+
 output "certificate_arn" {
   description = "ACM certificate ARN for 444noresponse.com — annotate on the frontend Ingress"
   value       = module.acm.certificate_arn

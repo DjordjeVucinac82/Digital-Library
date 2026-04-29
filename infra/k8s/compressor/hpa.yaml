@@ -1,0 +1,35 @@
+# HorizontalPodAutoscaler for the compressor (Spring Boot) deployment.
+#
+# The compressor is CPU-bound (GZIP compression), making CPU utilization the
+# correct scaling signal. Scales pods when average CPU exceeds 70%.
+#
+# scaleDown.stabilizationWindowSeconds=300: Spring Boot JVM pods take ~30s to
+# start and ~30s to pass readiness probes. Without a stabilization window,
+# a short burst of uploads would trigger rapid scale-out then scale-in, churning
+# pods and adding latency for users. 5 minutes lets the JVM settle before any
+# scale-in decision is made.
+#
+# minReplicas=2: same HA reasoning as frontend — 2 pods across 2 nodes.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: compressor
+  namespace: digital-library
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: compressor
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      # Wait 5 minutes after a scale-out before allowing scale-in
+      stabilizationWindowSeconds: 300

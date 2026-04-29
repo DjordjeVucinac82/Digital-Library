@@ -132,7 +132,7 @@ terraform init && terraform plan && terraform apply
 # Configure kubectl
 aws eks update-kubeconfig --name digital-library-dev --region eu-central-1 --profile Digital-Library
 
-# Apply manifests (see INSTRUCTIONS.md step 10 for filling in REPLACE_WITH_* placeholders)
+# Apply manifests (see INSTRUCTIONS.md step 11 for filling in REPLACE_WITH_* placeholders)
 kubectl apply -f infra/k8s/namespace.yaml
 kubectl apply -f infra/k8s/compressor/serviceaccount.yaml
 kubectl apply -f infra/k8s/worker/serviceaccount.yaml
@@ -149,7 +149,7 @@ kubectl get ingress frontend -n digital-library
 
 **Why EKS over ECS Fargate**: EKS gives fine-grained pod placement (frontend in public subnets, backend in private), native Kubernetes ecosystem (Helm, Ingress, IRSA), and is better for interview demonstration of Kubernetes skills. ECS Fargate has lower operational overhead and scales to zero — preferred for a genuine startup; EKS makes sense here for the demo and learning goals.
 
-**Two environments (dev + prod)**: test environment removed to save cost (~$72/month per EKS control plane). Dev uses spot instances and a single NAT gateway; prod uses on-demand and Multi-AZ for HA.
+**Three environments (dev + test + prod)**: dev and test both use spot instances and a single NAT gateway (~$72/month per EKS control plane). Prod uses on-demand instances and Multi-AZ for HA. VPC CIDRs are non-overlapping: dev `10.0.0.0/16`, prod `10.1.0.0/16`, test `10.2.0.0/16`.
 
 **Spring profiles for broker/DB selection**: `aws` profile (default) activates SQS + MySQL; `local` profile activates RabbitMQ + PostgreSQL. docker-compose sets `SPRING_PROFILES_ACTIVE=local`. No code changes needed between environments — only configuration.
 
@@ -157,7 +157,9 @@ kubectl get ingress frontend -n digital-library
 
 **nginx reverse proxy** (frontend): nginx serves the React SPA and proxies `/api/*` to the compressor ClusterIP service. This means only one ALB is needed (port 80 → frontend), and the compressor is never directly exposed to the internet.
 
-**Custom domains via external-dns**: `444noresponse.com` (prod) and `dev.444noresponse.com` (dev) point to their respective ALBs via Route 53. external-dns runs in `kube-system`, watches the Ingress `external-dns.alpha.kubernetes.io/hostname` annotation, and automatically creates/removes Route 53 A ALIAS records. ACM certificates are provisioned by Terraform (DNS-validated against the same hosted zone `Z0414591K81BU1BVJ424`). The ALB is configured to redirect HTTP → HTTPS.
+**Pod and node autoscaling**: frontend + compressor use CPU-based HPA (autoscaling/v2, 70% target, min=2/max=4). Worker uses KEDA with the AWS SQS scaler — queue depth is the correct signal for a queue-driven service, CPU is not. KEDA operator holds an IRSA role with `sqs:GetQueueAttributes`; `identityOwner: operator` in the ScaledObject avoids needing a TriggerAuthentication resource. Cluster Autoscaler handles node-level scaling via ASG discovery tags on both node groups. The `desired_size` field uses `lifecycle { ignore_changes }` so Terraform doesn't fight the autoscaler on subsequent applies. PodDisruptionBudgets (minAvailable=1) on all three services prevent simultaneous pod eviction during scale-in or node drains.
+
+**Custom domains via external-dns**: `444noresponse.com` (prod), `dev.444noresponse.com` (dev), and `test.444noresponse.com` (test) point to their respective ALBs via Route 53. external-dns runs in `kube-system`, watches the Ingress `external-dns.alpha.kubernetes.io/hostname` annotation, and automatically creates/removes Route 53 A ALIAS records. ACM certificates are provisioned by Terraform (DNS-validated against the same hosted zone `Z0414591K81BU1BVJ424`). The ALB is configured to redirect HTTP → HTTPS.
 
 **IRSA (IAM Roles for Service Accounts)**: each pod has only the permissions it needs. Compressor → SQS send only. Worker → SQS receive + Secrets Manager read. Credentials are short-lived tokens, never stored in environment variables or Kubernetes Secrets.
 
@@ -168,7 +170,7 @@ kubectl get ingress frontend -n digital-library
 ## The 3 Interview Deliverables
 
 1. **Cloud architecture** — EKS cluster, VPC with public/private subnets, ALB, SQS, RDS MySQL, ECR, IAM/IRSA
-2. **Environment model** — dev (spot, single-AZ, 1 NAT GW) vs prod (on-demand, Multi-AZ, 2 NAT GWs), separate VPCs, shared ECR
+2. **Environment model** — dev/test (spot, single-AZ, 1 NAT GW) vs prod (on-demand, Multi-AZ, 2 NAT GWs), separate VPCs with non-overlapping CIDRs
 3. **CI/CD pipeline** — GitHub Actions → ECR push → `kubectl set image` → rollout status; Terraform applied manually per environment
 
 ## AWS Credentials

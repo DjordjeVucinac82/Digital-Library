@@ -1,0 +1,16 @@
+# PodDisruptionBudget for the worker deployment.
+#
+# The worker is queue-driven and async — brief unavailability causes SQS
+# messages to redeliver (after visibility timeout) rather than fail requests.
+# The PDB prevents Cluster Autoscaler from evicting all worker pods at once
+# during a scale-in event, which would cause unnecessary redelivery delays.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: worker
+  namespace: digital-library
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: worker

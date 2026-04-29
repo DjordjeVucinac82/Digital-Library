@@ -1,0 +1,48 @@
+# KEDA ScaledObject for the worker (Spring Boot, SQS consumer) deployment.
+#
+# Scales worker pods based on the depth of the books-compressed SQS queue.
+# This is the architecturally correct signal for a queue-driven worker — CPU
+# usage tells you nothing when a worker is waiting for messages.
+#
+# Scaling formula: desired_pods = ceil(visible_messages / queueLength)
+#   e.g. 23 messages → ceil(23/5) = 5 pods
+#
+# BEFORE APPLYING: replace REPLACE_WITH_SQS_QUEUE_URL with the actual queue URL.
+# Get it: terraform -chdir=infra/environments/dev output -raw sqs_queue_url
+# This is done automatically in INSTRUCTIONS.md step 11 (sed substitution).
+#
+# Auth: identityOwner=operator tells KEDA to use the operator pod's own IRSA
+# role (keda-operator-irsa) to call sqs:GetQueueAttributes. No TriggerAuthentication
+# resource is needed — the IRSA annotation is set on the keda-operator SA during
+# Helm install (see INSTRUCTIONS.md step 9).
+#
+# Do NOT create a separate HPA for the worker. KEDA internally creates its own
+# HPA (keda-hpa-worker) — a second external HPA would conflict with it.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: worker
+  namespace: digital-library
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  # Wait 60s after last message before scaling down — avoids immediate teardown
+  # after a short burst where more messages may still arrive
+  cooldownPeriod: 60
+  # Poll the SQS queue every 30 seconds
+  pollingInterval: 30
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: REPLACE_WITH_SQS_QUEUE_URL
+        # Target: 5 messages per worker pod
+        queueLength: "5"
+        awsRegion: eu-central-1
+        # Use the KEDA operator pod's IRSA identity — no separate credentials needed
+        identityOwner: operator
+        # Count visible + in-flight messages so active processing is included
+        queueLengthStrategy: visible

@@ -12,13 +12,15 @@ Step-by-step guide to deploy the full stack from scratch. Follow the steps in or
 6. [Configure kubectl](#6-configure-kubectl)
 7. [Install AWS Load Balancer Controller](#7-install-aws-load-balancer-controller)
 8. [Install external-dns](#8-install-external-dns)
-9. [Create Kubernetes Namespace and Secrets](#9-create-kubernetes-namespace-and-secrets)
-10. [Update K8s Manifests with Terraform Outputs](#10-update-k8s-manifests-with-terraform-outputs)
-11. [Apply Kubernetes Manifests](#11-apply-kubernetes-manifests)
-12. [Verify the Deployment](#12-verify-the-deployment)
-13. [Deploy Prod Infrastructure](#13-deploy-prod-infrastructure)
-14. [CI/CD Pipeline Setup](#14-cicd-pipeline-setup)
-15. [Tear Down](#15-tear-down)
+9. [Install Scaling Controllers](#9-install-scaling-controllers)
+10. [Create Kubernetes Namespace and Secrets](#10-create-kubernetes-namespace-and-secrets)
+11. [Update K8s Manifests with Terraform Outputs](#11-update-k8s-manifests-with-terraform-outputs)
+12. [Apply Kubernetes Manifests](#12-apply-kubernetes-manifests)
+13. [Verify the Deployment](#13-verify-the-deployment)
+14. [Deploy Prod Infrastructure](#14-deploy-prod-infrastructure)
+15. [Deploy Test Infrastructure](#15-deploy-test-infrastructure)
+16. [CI/CD Pipeline Setup](#16-cicd-pipeline-setup)
+17. [Tear Down](#17-tear-down)
 
 ---
 
@@ -113,7 +115,9 @@ Key outputs to note:
 | `worker_irsa_arn` | K8s ServiceAccount |
 | `lb_controller_irsa_arn` | Helm values (step 7) |
 | `external_dns_irsa_arn` | Helm values (step 8) |
-| `certificate_arn` | K8s Ingress annotation (step 10) |
+| `cluster_autoscaler_irsa_arn` | Helm values (step 9) |
+| `keda_operator_irsa_arn` | Helm values (step 9) |
+| `certificate_arn` | K8s Ingress annotation (step 11) |
 
 ---
 
@@ -240,7 +244,95 @@ kubectl logs -l app.kubernetes.io/name=external-dns -n kube-system --tail=20
 
 ---
 
-## 9. Create Kubernetes Namespace and Secrets
+## 9. Install Scaling Controllers
+
+Install three components that enable dynamic scaling: Metrics Server (prerequisite for HPA),
+Cluster Autoscaler (node-level scaling), and KEDA (queue-depth-based worker scaling).
+
+**Must run after `terraform apply`** — the IRSA roles and ASG discovery tags must exist first.
+
+```bash
+# Collect IRSA ARNs and cluster name from Terraform
+CA_IRSA=$(terraform -chdir=infra/environments/dev output -raw cluster_autoscaler_irsa_arn)
+KEDA_IRSA=$(terraform -chdir=infra/environments/dev output -raw keda_operator_irsa_arn)
+CLUSTER_NAME=$(terraform -chdir=infra/environments/dev output -raw cluster_name)
+```
+
+### Metrics Server
+
+Metrics Server exposes CPU and memory usage via the Kubernetes Metrics API. Required by HPA —
+without it, `kubectl top` returns no data and HPAs report `unable to fetch metrics`.
+
+```bash
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+helm repo update
+
+# --kubelet-insecure-tls: EKS nodes use self-signed kubelet certificates.
+# Without this flag, Metrics Server cannot scrape node metrics.
+helm install metrics-server metrics-server/metrics-server \
+  --namespace kube-system \
+  --set args[0]="--kubelet-insecure-tls"
+
+kubectl rollout status deployment/metrics-server -n kube-system --timeout=120s
+
+# Verify it's collecting data (wait ~60s for the first scrape)
+kubectl top nodes
+```
+
+### Cluster Autoscaler
+
+Cluster Autoscaler watches for `Pending` pods (no schedulable node) and scales up the appropriate
+node group. It also scales down underutilised nodes, respecting PodDisruptionBudgets.
+
+The EKS node groups are tagged for auto-discovery (set in Terraform):
+`k8s.io/cluster-autoscaler/enabled=true` and `k8s.io/cluster-autoscaler/<cluster-name>=owned`.
+
+```bash
+helm repo add autoscaler https://kubernetes.github.io/autoscaler
+helm repo update
+
+helm install cluster-autoscaler autoscaler/cluster-autoscaler \
+  --namespace kube-system \
+  --set autoDiscovery.clusterName=${CLUSTER_NAME} \
+  --set awsRegion=eu-central-1 \
+  --set rbac.serviceAccount.name=cluster-autoscaler \
+  --set rbac.serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=${CA_IRSA} \
+  --set extraArgs.balance-similar-node-groups=true \
+  --set extraArgs.skip-nodes-with-system-pods=false
+
+kubectl rollout status deployment/cluster-autoscaler -n kube-system --timeout=120s
+```
+
+> `balance-similar-node-groups=true` distributes nodes evenly across AZs.
+> `skip-nodes-with-system-pods=false` allows scale-in on nodes that only run
+> DaemonSet pods (kube-proxy, vpc-cni) — otherwise the cluster never shrinks.
+
+### KEDA
+
+KEDA (Kubernetes Event-Driven Autoscaler) scales the worker Deployment based on the depth of
+the SQS queue. The operator pod uses its own IRSA identity to call `sqs:GetQueueAttributes`
+every 30 seconds. No TriggerAuthentication resource is needed.
+
+```bash
+helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+
+helm install keda kedacore/keda \
+  --namespace keda \
+  --create-namespace \
+  --set serviceAccount.operator.annotations."eks\.amazonaws\.com/role-arn"=${KEDA_IRSA}
+
+kubectl rollout status deployment/keda-operator -n keda --timeout=120s
+```
+
+> KEDA is installed in its own `keda` namespace (chart default). The IRSA annotation on the
+> `keda-operator` ServiceAccount allows the operator to read SQS queue depth.
+> The worker ScaledObject (`infra/k8s/worker/scaledobject.yaml`) uses `identityOwner: operator`
+> which tells KEDA to use this operator role — no per-ScaledObject credentials needed.
+
+---
+
+## 10. Create Kubernetes Namespace and Secrets
 
 ### Create namespace
 
@@ -282,7 +374,7 @@ kubectl get secret worker-db-secret -n digital-library
 
 ---
 
-## 10. Update K8s Manifests with Terraform Outputs
+## 11. Update K8s Manifests with Terraform Outputs
 
 The K8s manifests contain `REPLACE_WITH_*` placeholders that must be filled in before applying.
 
@@ -330,13 +422,22 @@ sed -i '' "s|REPLACE_WITH_CERT_ARN|${CERT_ARN}|g" \
   infra/k8s/frontend/ingress.yaml
 sed -i '' "s|REPLACE_WITH_APP_DOMAIN|${APP_DOMAIN}|g" \
   infra/k8s/frontend/ingress.yaml
+
+# Worker ScaledObject — SQS URL for the KEDA queue-depth trigger
+# (SQS_QUEUE_URL is already set above — reuse it here)
+sed -i '' "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_QUEUE_URL}|g" \
+  infra/k8s/worker/scaledobject.yaml
 ```
 
 ---
 
-## 11. Apply Kubernetes Manifests
+## 12. Apply Kubernetes Manifests
 
 Apply in the correct order: namespace → service accounts → config → workloads → networking.
+The glob `kubectl apply -f infra/k8s/<service>/` picks up all YAML files in the directory,
+including the new hpa.yaml, pdb.yaml, and scaledobject.yaml files automatically.
+
+**KEDA must be running (step 9) before applying** — the ScaledObject CRD won't exist otherwise.
 
 ```bash
 # Namespace (must exist before all other resources)
@@ -350,7 +451,7 @@ kubectl apply -f infra/k8s/worker/serviceaccount.yaml
 kubectl apply -f infra/k8s/compressor/configmap.yaml
 kubectl apply -f infra/k8s/worker/configmap.yaml
 
-# Deployments and Services
+# Deployments, Services, HPA, PDB, ScaledObject (all picked up by directory glob)
 kubectl apply -f infra/k8s/frontend/
 kubectl apply -f infra/k8s/compressor/
 kubectl apply -f infra/k8s/worker/
@@ -363,16 +464,21 @@ kubectl rollout status deployment/worker -n digital-library --timeout=300s
 
 ---
 
-## 12. Verify the Deployment
+## 13. Verify the Deployment
 
 ```bash
-# Check all pods are Running (2/2 for each deployment)
+# Check all pods are Running
 kubectl get pods -n digital-library
+
+# Verify scaling resources are active
+kubectl get hpa -n digital-library          # frontend + compressor (TARGETS should show CPU%)
+kubectl get scaledobject -n digital-library  # worker (READY=True)
+kubectl get pdb -n digital-library          # all 3 services
 
 # Get the ALB URL (takes ~2 minutes for the ALB to provision)
 kubectl get ingress frontend -n digital-library
 
-# Confirm external-dns created the Route 53 record (may take ~30 seconds after ALB is up)
+# Confirm external-dns created the Route 53 record
 kubectl logs -l app.kubernetes.io/name=external-dns -n kube-system --tail=10
 
 # Test via the custom domain (HTTP redirects to HTTPS automatically)
@@ -386,9 +492,9 @@ kubectl logs -l app=worker -n digital-library --tail=50
 
 ---
 
-## 13. Deploy Prod Infrastructure
+## 14. Deploy Prod Infrastructure
 
-Repeat Steps 4–12 for prod, substituting `dev` with `prod`:
+Repeat Steps 4–13 for prod, substituting `dev` with `prod`:
 
 ```bash
 # Deploy infrastructure
@@ -400,9 +506,10 @@ terraform apply
 CLUSTER_NAME=$(terraform output -raw cluster_name)
 aws eks update-kubeconfig --name ${CLUSTER_NAME} --region eu-central-1
 
-# Repeat Steps 5–12 with prod outputs
+# Repeat Steps 5–13 with prod outputs
 # For step 8 (external-dns), use txtOwnerId=digital-library-prod
-# For step 10 (manifests), set APP_DOMAIN=444noresponse.com
+# For step 9 (scaling controllers), substitute prod IRSA ARNs
+# For step 11 (manifests), set APP_DOMAIN=444noresponse.com
 ```
 
 Key differences in prod:
@@ -414,7 +521,41 @@ Key differences in prod:
 
 ---
 
-## 14. CI/CD Pipeline Setup
+## 15. Deploy Test Infrastructure
+
+The test environment mirrors dev (spot instances, single NAT GW, `db.t3.micro`).
+Use it to validate infrastructure or application changes before promoting to prod.
+
+Repeat Steps 4–13, substituting `dev` → `test`:
+
+```bash
+# Deploy infrastructure
+cd infra/environments/test
+terraform init
+terraform apply
+
+# Configure kubectl for the test cluster
+CLUSTER_NAME=$(terraform output -raw cluster_name)
+aws eks update-kubeconfig --name ${CLUSTER_NAME} --region eu-central-1 --profile Digital-Library
+
+# Repeat Steps 5–13 with test outputs
+# For step 8 (external-dns), use txtOwnerId=digital-library-test
+# For step 11 (manifests), set APP_DOMAIN=test.444noresponse.com
+```
+
+Key differences vs dev:
+
+| Setting | Dev | Test |
+|---|---|---|
+| VPC CIDR | `10.0.0.0/16` | `10.2.0.0/16` |
+| EKS cluster | `digital-library-dev` | `digital-library-test` |
+| Domain | `dev.444noresponse.com` | `test.444noresponse.com` |
+| external-dns txtOwnerId | `digital-library-dev` | `digital-library-test` |
+| TF state key | `dev/terraform.tfstate` | `test/terraform.tfstate` |
+
+---
+
+## 16. CI/CD Pipeline Setup
 
 
 ### GitHub Secrets required
@@ -493,7 +634,7 @@ git push origin main
 
 ---
 
-## 15. Tear Down
+## 17. Tear Down
 
 > **Important:** Delete Kubernetes resources BEFORE running `terraform destroy`.
 > If the Ingress is still present when Terraform destroys the VPC, the ALB holds
@@ -509,12 +650,24 @@ kubectl delete -f infra/k8s/namespace.yaml
 # Wait for the ALB to be fully deleted (~60 seconds)
 sleep 60
 
-# Step 2: Uninstall Helm releases (external-dns first so it stops watching for DNS changes)
+# Step 2: Uninstall Helm releases
+# Order matters: KEDA first (stops ScaledObject reconciliation), then external-dns
+# (stops Route 53 updates), then LB controller, then metrics/autoscaler
+helm uninstall keda -n keda
 helm uninstall external-dns -n kube-system
 helm uninstall aws-load-balancer-controller -n kube-system
+helm uninstall cluster-autoscaler -n kube-system
+helm uninstall metrics-server -n kube-system
 
-# Step 3: Destroy the Terraform infrastructure (order matters: dev first, then prod)
+# Remove the KEDA namespace (chart does not delete it automatically)
+kubectl delete namespace keda
+
+# Step 3: Destroy the Terraform infrastructure
 cd infra/environments/dev
+terraform destroy
+
+# For test:
+cd infra/environments/test
 terraform destroy
 
 # For prod:

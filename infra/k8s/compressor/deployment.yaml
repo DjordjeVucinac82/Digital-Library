@@ -14,7 +14,7 @@ metadata:
   labels:
     app: compressor
 spec:
-  replicas: 2
+  # replicas is intentionally omitted — managed by the HPA (hpa.yaml)
   selector:
     matchLabels:
       app: compressor
