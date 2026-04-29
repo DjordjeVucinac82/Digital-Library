@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mxGraphModel dx="1654" dy="1169" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+<mxGraphModel dx="1654" dy="1169" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1400" math="0" shadow="0">
   <root>
     <mxCell id="0"/>
     <mxCell id="1" parent="0"/>
@@ -30,19 +30,24 @@
       <mxGeometry x="395" y="355" width="160" height="80" as="geometry"/>
     </mxCell>
 
-    <!-- ===== VPC Container ===== -->
+    <!-- ===== Developer (port-forward access) ===== -->
+    <mxCell id="60" value="&lt;b&gt;Developer&lt;/b&gt;&lt;br&gt;kubectl port-forward&lt;br&gt;:3001 Grafana | :9090 Prometheus" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8EAF6;strokeColor=#3949AB;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="40" y="560" width="185" height="70" as="geometry"/>
+    </mxCell>
+
+    <!-- ===== VPC Container (expanded height) ===== -->
     <mxCell id="30" value="&lt;b&gt;AWS VPC  (10.1.0.0/16)&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF7FF;strokeColor=#0073BB;verticalAlign=top;fontSize=13;fontStyle=1;spacingTop=8;" vertex="1" parent="1">
-      <mxGeometry x="595" y="155" width="1010" height="870" as="geometry"/>
+      <mxGeometry x="595" y="155" width="1010" height="1110" as="geometry"/>
     </mxCell>
 
-    <!-- Public Subnets -->
+    <!-- Public Subnets (expanded height) -->
     <mxCell id="31" value="&lt;b&gt;Public Subnets&lt;/b&gt;&lt;br&gt;eu-central-1a + 1b" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;verticalAlign=top;fontSize=11;fontStyle=1;dashed=1;" vertex="1" parent="1">
-      <mxGeometry x="615" y="200" width="220" height="790" as="geometry"/>
+      <mxGeometry x="615" y="200" width="220" height="1040" as="geometry"/>
     </mxCell>
 
-    <!-- Private Subnets -->
+    <!-- Private Subnets (expanded height) -->
     <mxCell id="32" value="&lt;b&gt;Private Subnets&lt;/b&gt;&lt;br&gt;eu-central-1a + 1b" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F5A623;verticalAlign=top;fontSize=11;fontStyle=1;dashed=1;" vertex="1" parent="1">
-      <mxGeometry x="855" y="200" width="730" height="790" as="geometry"/>
+      <mxGeometry x="855" y="200" width="730" height="1040" as="geometry"/>
     </mxCell>
 
     <!-- Internet Gateway -->
@@ -52,7 +57,7 @@
 
     <!-- NAT Gateway -->
     <mxCell id="34" value="&lt;b&gt;NAT Gateway&lt;/b&gt;&lt;br&gt;(outbound for private pods)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FF9800;fontSize=11;" vertex="1" parent="1">
-      <mxGeometry x="635" y="850" width="165" height="60" as="geometry"/>
+      <mxGeometry x="635" y="1080" width="165" height="60" as="geometry"/>
     </mxCell>
 
     <!-- Frontend Pod -->
@@ -95,9 +100,9 @@
       <mxGeometry x="1445" y="590" width="150" height="80" as="geometry"/>
     </mxCell>
 
-    <!-- K8s System Controllers -->
+    <!-- K8s System Controllers (moved down) -->
     <mxCell id="43" value="&lt;b&gt;K8s System Controllers&lt;/b&gt;&lt;br&gt;• AWS LB Controller (Ingress → ALB)&lt;br&gt;• Cluster Autoscaler (ASG)&lt;br&gt;• KEDA operator (SQS scaler)&lt;br&gt;• external-dns (Route 53 sync)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#9E9E9E;fontSize=10;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="875" y="790" width="215" height="120" as="geometry"/>
+      <mxGeometry x="875" y="1030" width="215" height="120" as="geometry"/>
     </mxCell>
 
     <!-- IRSA Badges -->
@@ -107,6 +112,26 @@
 
     <mxCell id="45" value="&lt;b&gt;IRSA&lt;/b&gt;: SQS ReceiveMessage&lt;br&gt;S3 GetObject + DeleteObject" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFDE7;strokeColor=#FFC107;fontSize=9;" vertex="1" parent="1">
       <mxGeometry x="1200" y="490" width="175" height="40" as="geometry"/>
+    </mxCell>
+
+    <!-- ===== Monitoring Namespace ===== -->
+    <mxCell id="50" value="&lt;b&gt;monitoring namespace&lt;/b&gt;&lt;br&gt;(kube-prometheus-stack)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7B1FA2;verticalAlign=top;fontSize=11;fontStyle=1;spacingTop=6;dashed=1;" vertex="1" parent="1">
+      <mxGeometry x="865" y="755" width="705" height="240" as="geometry"/>
+    </mxCell>
+
+    <!-- Prometheus -->
+    <mxCell id="51" value="&lt;b&gt;Prometheus&lt;/b&gt;&lt;br&gt;StatefulSet&lt;br&gt;Scrapes all 3 services&lt;br&gt;+ node-exporter&lt;br&gt;Retention: 15d | PVC: 10Gi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="885" y="800" width="185" height="130" as="geometry"/>
+    </mxCell>
+
+    <!-- Grafana -->
+    <mxCell id="52" value="&lt;b&gt;Grafana&lt;/b&gt;&lt;br&gt;Deployment&lt;br&gt;JVM dashboard (ID 11378)&lt;br&gt;Node CPU/memory&lt;br&gt;PVC: 1Gi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#F57F17;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="1115" y="800" width="175" height="120" as="geometry"/>
+    </mxCell>
+
+    <!-- node-exporter DaemonSet -->
+    <mxCell id="53" value="&lt;b&gt;node-exporter&lt;/b&gt;&lt;br&gt;DaemonSet (1 pod/node)&lt;br&gt;CPU, memory, disk&lt;br&gt;per EKS node" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#9C27B0;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="1335" y="800" width="210" height="100" as="geometry"/>
     </mxCell>
 
     <!-- ===== ARROWS ===== -->
@@ -180,6 +205,34 @@
 
     <!-- Private pods → NAT GW (outbound) -->
     <mxCell id="115" value="outbound (ECR pull)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#9E9E9E;" edge="1" source="36" target="34" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- ===== Monitoring scrape arrows (Prometheus → pods, dashed purple) ===== -->
+    <mxCell id="120" value="scrape /metrics :9113" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#7B1FA2;fontColor=#7B1FA2;endArrow=open;endFill=0;" edge="1" source="51" target="35" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="121" value="scrape /actuator/prometheus :8081" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#7B1FA2;fontColor=#7B1FA2;endArrow=open;endFill=0;" edge="1" source="51" target="36" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="122" value="scrape /actuator/prometheus :8082" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#7B1FA2;fontColor=#7B1FA2;endArrow=open;endFill=0;" edge="1" source="51" target="37" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Grafana → Prometheus (internal PromQL queries) -->
+    <mxCell id="123" value="PromQL queries" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;strokeColor=#E65100;fontColor=#E65100;" edge="1" source="52" target="51" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Developer → Grafana (port-forward) -->
+    <mxCell id="124" value="port-forward :3001" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#3949AB;fontColor=#3949AB;" edge="1" source="60" target="52" parent="1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <!-- Developer → Prometheus (port-forward) -->
+    <mxCell id="125" value="port-forward :9090" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;dashed=1;strokeColor=#3949AB;fontColor=#3949AB;" edge="1" source="60" target="51" parent="1">
       <mxGeometry relative="1" as="geometry"/>
     </mxCell>
 
