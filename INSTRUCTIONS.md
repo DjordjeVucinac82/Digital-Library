@@ -118,6 +118,7 @@ Key outputs to note:
 | `cluster_autoscaler_irsa_arn` | Helm values (step 9) |
 | `keda_operator_irsa_arn` | Helm values (step 9) |
 | `certificate_arn` | K8s Ingress annotation (step 11) |
+| `s3_bucket_name` | K8s ConfigMap (step 11) |
 
 ---
 
@@ -135,20 +136,21 @@ ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.eu-central-1.amazonaws.com"
 aws ecr get-login-password --region eu-central-1 --profile Digital-Library \
   | docker login --username AWS --password-stdin ${ECR_REGISTRY}
 
-# Build and push all three images
-IMAGE_TAG=$(git rev-parse --short HEAD)
+# Build for linux/amd64 (EKS nodes are x86_64 — Mac M-series would produce arm64 images otherwise)
+# --push streams each layer directly to ECR without a local intermediate copy
+docker buildx build --platform linux/amd64 --push \
+  -t ${ECR_REGISTRY}/digital-library/frontend:latest ./frontend
 
-docker build -t ${ECR_REGISTRY}/digital-library/frontend:${IMAGE_TAG} ./frontend
-docker build -t ${ECR_REGISTRY}/digital-library/compressor:${IMAGE_TAG} ./compressor
-docker build -t ${ECR_REGISTRY}/digital-library/worker:${IMAGE_TAG} ./worker
+docker buildx build --platform linux/amd64 --push \
+  -t ${ECR_REGISTRY}/digital-library/compressor:latest ./compressor
 
-docker push ${ECR_REGISTRY}/digital-library/frontend:${IMAGE_TAG}
-docker push ${ECR_REGISTRY}/digital-library/compressor:${IMAGE_TAG}
-docker push ${ECR_REGISTRY}/digital-library/worker:${IMAGE_TAG}
+docker buildx build --platform linux/amd64 --push \
+  -t ${ECR_REGISTRY}/digital-library/worker:latest ./worker
 
-echo "Image tag: ${IMAGE_TAG}"
-echo "Registry:  ${ECR_REGISTRY}"
+echo "Registry: ${ECR_REGISTRY}"
 ```
+
+> **Note:** All K8s Deployments have `imagePullPolicy: Always` so `kubectl rollout restart` will always pull the latest image regardless of the `:latest` tag being unchanged.
 
 ---
 
@@ -378,37 +380,55 @@ kubectl get secret worker-db-secret -n digital-library
 
 The K8s manifests contain `REPLACE_WITH_*` placeholders that must be filled in before applying.
 
+### Option A — automated script (recommended for prod)
+
+```bash
+# Renders infra/k8s/ → infra/k8s-rendered/prod/ with all placeholders substituted.
+# Reads all values directly from terraform output — no manual variable setting needed.
+./scripts/configure-manifests-prod.sh
+```
+
+The script substitutes: ECR registry, SQS queue URL, DB host, S3 bucket name, IRSA ARNs,
+ACM certificate ARN, and app domain. The rendered output is git-ignored; re-run the script
+whenever Terraform outputs change.
+
+### Option B — manual substitution
+
 ```bash
 # Collect all the values you need
 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.eu-central-1.amazonaws.com"
-IMAGE_TAG=$(git rev-parse --short HEAD)
 SQS_QUEUE_URL=$(terraform -chdir=infra/environments/dev output -raw sqs_queue_url)
 DB_HOST=$(terraform -chdir=infra/environments/dev output -raw db_endpoint)
+S3_BUCKET=$(terraform -chdir=infra/environments/dev output -raw s3_bucket_name)
 COMPRESSOR_IRSA=$(terraform -chdir=infra/environments/dev output -raw compressor_irsa_arn)
 WORKER_IRSA=$(terraform -chdir=infra/environments/dev output -raw worker_irsa_arn)
 CERT_ARN=$(terraform -chdir=infra/environments/dev output -raw certificate_arn)
 APP_DOMAIN="dev.444noresponse.com"   # use 444noresponse.com for prod
 
 # Frontend deployment — update ECR image
-sed -i '' "s|REPLACE_WITH_ECR_URI/digital-library/frontend:latest|${ECR_REGISTRY}/digital-library/frontend:${IMAGE_TAG}|g" \
+sed -i '' "s|REPLACE_WITH_ECR_URI/digital-library/frontend:latest|${ECR_REGISTRY}/digital-library/frontend:latest|g" \
   infra/k8s/frontend/deployment.yaml
 
 # Compressor deployment — update ECR image
-sed -i '' "s|REPLACE_WITH_ECR_URI/digital-library/compressor:latest|${ECR_REGISTRY}/digital-library/compressor:${IMAGE_TAG}|g" \
+sed -i '' "s|REPLACE_WITH_ECR_URI/digital-library/compressor:latest|${ECR_REGISTRY}/digital-library/compressor:latest|g" \
   infra/k8s/compressor/deployment.yaml
 
 # Worker deployment — update ECR image
-sed -i '' "s|REPLACE_WITH_ECR_URI/digital-library/worker:latest|${ECR_REGISTRY}/digital-library/worker:${IMAGE_TAG}|g" \
+sed -i '' "s|REPLACE_WITH_ECR_URI/digital-library/worker:latest|${ECR_REGISTRY}/digital-library/worker:latest|g" \
   infra/k8s/worker/deployment.yaml
 
-# Compressor configmap — SQS URL
+# Compressor configmap — SQS URL + S3 bucket
 sed -i '' "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_QUEUE_URL}|g" \
   infra/k8s/compressor/configmap.yaml
+sed -i '' "s|REPLACE_WITH_S3_BUCKET_NAME|${S3_BUCKET}|g" \
+  infra/k8s/compressor/configmap.yaml
 
-# Worker configmap — SQS URL and DB host
+# Worker configmap — SQS URL, DB host, S3 bucket
 sed -i '' "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_QUEUE_URL}|g" \
   infra/k8s/worker/configmap.yaml
 sed -i '' "s|REPLACE_WITH_DB_HOST|${DB_HOST}|g" \
+  infra/k8s/worker/configmap.yaml
+sed -i '' "s|REPLACE_WITH_S3_BUCKET_NAME|${S3_BUCKET}|g" \
   infra/k8s/worker/configmap.yaml
 
 # ServiceAccounts — IRSA ARNs
@@ -424,7 +444,6 @@ sed -i '' "s|REPLACE_WITH_APP_DOMAIN|${APP_DOMAIN}|g" \
   infra/k8s/frontend/ingress.yaml
 
 # Worker ScaledObject — SQS URL for the KEDA queue-depth trigger
-# (SQS_QUEUE_URL is already set above — reuse it here)
 sed -i '' "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_QUEUE_URL}|g" \
   infra/k8s/worker/scaledobject.yaml
 ```

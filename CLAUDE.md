@@ -13,12 +13,12 @@ This workspace is for preparing a final technical interview at Zühlke (DevOps/C
 ### Application flow
 
 ```
-Employees → Library Portal (React) → Compressor (Java) → SQS → Worker (Java) → RDS MySQL
+Employees → Library Portal (React) → Compressor (Java) → S3 + SQS → Worker (Java) → RDS MySQL
 ```
 
 - **Library Portal** (`frontend/`): React/Vite app — employees upload PDF books, served via nginx (port 80)
-- **Compressor** (`compressor/`): Spring Boot on port 8081 — receives PDFs via REST, GZIP-compresses them, publishes to SQS. nginx reverse-proxies `/api/*` to compressor from the frontend pod.
-- **Worker** (`worker/`): Spring Boot on port 8082 — consumes from SQS, persists compressed binary to RDS MySQL
+- **Compressor** (`compressor/`): Spring Boot on port 8081 — receives PDFs via REST, GZIP-compresses them, uploads compressed bytes to S3, sends the S3 key to SQS. nginx reverse-proxies `/api/*` to compressor from the frontend pod.
+- **Worker** (`worker/`): Spring Boot on port 8082 — receives S3 key from SQS, downloads compressed bytes from S3, persists to RDS MySQL, deletes the S3 object
 - **Message Broker**: RabbitMQ locally (`local` Spring profile) → Amazon SQS in AWS (`aws` Spring profile)
 - **Database**: PostgreSQL locally → Amazon RDS MySQL in AWS
 
@@ -59,6 +59,7 @@ Zuhlke-library/
 │   │   ├── ecr/                # ECR repositories (frontend, compressor, worker)
 │   │   ├── iam/                # IRSA roles + node role + LB controller role
 │   │   ├── rds/                # RDS MySQL + Secrets Manager password
+│   │   ├── s3/                 # Transient S3 bucket for compressed PDFs (SQS size workaround)
 │   │   └── sqs/                # SQS queue + DLQ
 │   ├── environments/
 │   │   ├── dev/                # dev tfvars + provider.tf (S3 backend)
@@ -161,7 +162,9 @@ kubectl get ingress frontend -n digital-library
 
 **Custom domains via external-dns**: `444noresponse.com` (prod), `dev.444noresponse.com` (dev), and `test.444noresponse.com` (test) point to their respective ALBs via Route 53. external-dns runs in `kube-system`, watches the Ingress `external-dns.alpha.kubernetes.io/hostname` annotation, and automatically creates/removes Route 53 A ALIAS records. ACM certificates are provisioned by Terraform (DNS-validated against the same hosted zone `Z0414591K81BU1BVJ424`). The ALB is configured to redirect HTTP → HTTPS.
 
-**IRSA (IAM Roles for Service Accounts)**: each pod has only the permissions it needs. Compressor → SQS send only. Worker → SQS receive + Secrets Manager read. Credentials are short-lived tokens, never stored in environment variables or Kubernetes Secrets.
+**S3 intermediate storage for SQS size limit**: SQS has a 256 KB message limit — too small for any real PDF. Compressor uploads the compressed bytes to S3 (`digital-library-books-{env}-{account_id}`) under the `books/` prefix using a UUID key, then sends only that key to SQS. Worker downloads the bytes, persists to RDS, then deletes the S3 object. A 1-day lifecycle expiry on the bucket acts as a safety net if the worker fails to delete. Bucket name is injected via `S3_BUCKET_NAME` in the K8s ConfigMap.
+
+**IRSA (IAM Roles for Service Accounts)**: each pod has only the permissions it needs. Compressor → SQS send + S3 PutObject on `books/*`. Worker → SQS receive + S3 GetObject + S3 DeleteObject on `books/*` + Secrets Manager read. Credentials are short-lived tokens, never stored in environment variables or Kubernetes Secrets.
 
 **DB password in Secrets Manager**: Terraform generates a random password, stores it in Secrets Manager, and passes it to RDS. INSTRUCTIONS.md step 8 documents pulling the secret to create the K8s Secret. For production, use External Secrets Operator to automate this sync.
 
