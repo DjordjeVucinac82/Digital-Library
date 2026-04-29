@@ -23,9 +23,6 @@ jobs:
   build-and-push:
     name: Build & push Docker images to ECR
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.tag.outputs.image_tag }}
-
     steps:
       - uses: actions/checkout@v4
 
@@ -36,33 +33,35 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set image tag
-        id: tag
-        run: echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push compressor
         uses: docker/build-push-action@v6
         with:
           context: ./compressor
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.ECR_REGISTRY }}/digital-library/compressor:${{ github.sha }}
+          tags: ${{ env.ECR_REGISTRY }}/digital-library/compressor:latest
 
       - name: Build and push worker
         uses: docker/build-push-action@v6
         with:
           context: ./worker
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.ECR_REGISTRY }}/digital-library/worker:${{ github.sha }}
+          tags: ${{ env.ECR_REGISTRY }}/digital-library/worker:latest
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.ECR_REGISTRY }}/digital-library/frontend:${{ github.sha }}
+          tags: ${{ env.ECR_REGISTRY }}/digital-library/frontend:latest
 
   # ─── Deploy to EKS via kubectl ───────────────────────────────────────────────
   deploy:
@@ -73,7 +72,6 @@ jobs:
 
     env:
       ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
-      IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -92,21 +90,13 @@ jobs:
             --name digital-library-${{ env.ENVIRONMENT }} \
             --region ${{ env.AWS_REGION }}
 
-      # Update the image tag for each deployment.
-      # kubectl set image only updates the image — all other manifest fields stay as-is.
-      - name: Update image tags
+      # All deployments use :latest with imagePullPolicy: Always — rollout restart
+      # forces each pod to pull the freshly pushed image from ECR.
+      - name: Rollout restart
         run: |
-          kubectl set image deployment/frontend \
-            frontend=${{ env.ECR_REGISTRY }}/digital-library/frontend:${{ env.IMAGE_TAG }} \
-            -n digital-library
-
-          kubectl set image deployment/compressor \
-            compressor=${{ env.ECR_REGISTRY }}/digital-library/compressor:${{ env.IMAGE_TAG }} \
-            -n digital-library
-
-          kubectl set image deployment/worker \
-            worker=${{ env.ECR_REGISTRY }}/digital-library/worker:${{ env.IMAGE_TAG }} \
-            -n digital-library
+          kubectl rollout restart deployment/frontend   -n digital-library
+          kubectl rollout restart deployment/compressor -n digital-library
+          kubectl rollout restart deployment/worker     -n digital-library
 
       # Wait for rolling update to complete — fails the pipeline if pods don't become ready
       - name: Wait for rollouts

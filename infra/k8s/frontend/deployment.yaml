@@ -43,6 +43,7 @@ spec:
         - name: frontend
           # Replace with actual ECR URI — the CD pipeline keeps this updated
           image: REPLACE_WITH_ECR_URI/digital-library/frontend:latest
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 80

@@ -44,6 +44,7 @@ spec:
       containers:
         - name: compressor
           image: REPLACE_WITH_ECR_URI/digital-library/compressor:latest
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 8081

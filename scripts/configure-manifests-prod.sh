@@ -17,7 +17,7 @@ ENVIRONMENT="prod"
 TF_DIR="infra/environments/${ENVIRONMENT}"
 SOURCE_DIR="infra/k8s"
 RENDERED_DIR="infra/k8s-rendered/${ENVIRONMENT}"
-IMAGE_TAG="${1:-$(git rev-parse --short HEAD)}"
+IMAGE_TAG="${1:-latest}"
 
 # Digital-Library profile is used for all AWS calls (terraform provider + AWS CLI)
 export AWS_PROFILE="Digital-Library"

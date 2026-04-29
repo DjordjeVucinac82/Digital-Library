@@ -44,6 +44,7 @@ spec:
       containers:
         - name: worker
           image: REPLACE_WITH_ECR_URI/digital-library/worker:latest
+          imagePullPolicy: Always
 
           ports:
             - containerPort: 8082
