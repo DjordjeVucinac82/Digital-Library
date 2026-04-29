@@ -29,6 +29,14 @@ module "acm" {
 
 # ─── IAM (node role — needed by EKS node groups) ─────────────────────────────
 
+data "aws_caller_identity" "current" {}
+
+module "s3" {
+  source      = "../../modules/s3"
+  environment = local.environment
+  account_id  = data.aws_caller_identity.current.account_id
+}
+
 module "iam" {
   source = "../../modules/iam"
 
@@ -40,6 +48,7 @@ module "iam" {
   sqs_dlq_arn       = module.sqs.dlq_arn
   db_secret_arn     = module.rds.db_secret_arn
   hosted_zone_id    = local.hosted_zone_id
+  s3_bucket_arn     = module.s3.bucket_arn
 }
 
 # ─── VPC ──────────────────────────────────────────────────────────────────────

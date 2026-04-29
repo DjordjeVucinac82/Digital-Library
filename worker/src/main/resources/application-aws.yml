@@ -29,3 +29,6 @@ app:
   sqs:
     # Injected via K8s ConfigMap — see infra/k8s/worker/configmap.yaml
     queue-url: ${SQS_QUEUE_URL}
+  s3:
+    # Injected via K8s ConfigMap — see infra/k8s/worker/configmap.yaml
+    bucket-name: ${S3_BUCKET_NAME}

@@ -47,6 +47,12 @@
             <artifactId>sts</artifactId>
         </dependency>
 
+        <!-- S3 client — worker downloads compressed bytes, deletes object after saving to RDS -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+
         <!-- RabbitMQ consumer (active in 'local' Spring profile — docker-compose) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -71,6 +77,12 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- Web layer — required for Actuator to expose HTTP /actuator/health for K8s probes -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
         <!-- Health checks and metrics -->

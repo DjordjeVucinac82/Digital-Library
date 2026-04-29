@@ -65,3 +65,8 @@ output "certificate_arn" {
   description = "ACM certificate ARN for dev.444noresponse.com — annotate on the frontend Ingress"
   value       = module.acm.certificate_arn
 }
+
+output "s3_bucket_name" {
+  description = "S3 bucket for transient compressed books — inject as S3_BUCKET_NAME in pods"
+  value       = module.s3.bucket_name
+}

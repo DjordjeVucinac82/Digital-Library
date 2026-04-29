@@ -102,6 +102,25 @@ resource "aws_iam_role_policy_attachment" "compressor_sqs" {
   policy_arn = aws_iam_policy.compressor_sqs.arn
 }
 
+resource "aws_iam_policy" "compressor_s3" {
+  name        = "${var.cluster_name}-compressor-s3"
+  description = "Allow compressor to upload compressed books to S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:PutObject"]
+      Resource = "${var.s3_bucket_arn}/books/*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "compressor_s3" {
+  role       = aws_iam_role.compressor_irsa.name
+  policy_arn = aws_iam_policy.compressor_s3.arn
+}
+
 # ─── IRSA: Worker ─────────────────────────────────────────────────────────────
 
 # Worker can receive/delete from the queue and read the DB secret from Secrets Manager.
@@ -172,6 +191,28 @@ resource "aws_iam_role_policy_attachment" "worker_sqs" {
 resource "aws_iam_role_policy_attachment" "worker_secrets" {
   role       = aws_iam_role.worker_irsa.name
   policy_arn = aws_iam_policy.worker_secrets.arn
+}
+
+resource "aws_iam_policy" "worker_s3" {
+  name        = "${var.cluster_name}-worker-s3"
+  description = "Allow worker to download and delete compressed books from S3"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ]
+      Resource = "${var.s3_bucket_arn}/books/*"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "worker_s3" {
+  role       = aws_iam_role.worker_irsa.name
+  policy_arn = aws_iam_policy.worker_s3.arn
 }
 
 # ─── IRSA: AWS Load Balancer Controller ───────────────────────────────────────

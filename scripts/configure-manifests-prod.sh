@@ -32,6 +32,7 @@ COMPRESSOR_ECR=$(echo "${ECR_JSON}" | jq -r '.compressor')
 WORKER_ECR=$(echo "${ECR_JSON}" | jq -r '.worker')
 
 SQS_URL=$(terraform -chdir="${TF_DIR}" output -raw sqs_queue_url)
+S3_BUCKET=$(terraform -chdir="${TF_DIR}" output -raw s3_bucket_name)
 DB_HOST=$(terraform -chdir="${TF_DIR}" output -raw db_endpoint)
 CERT_ARN=$(terraform -chdir="${TF_DIR}" output -raw certificate_arn)
 COMPRESSOR_IRSA=$(terraform -chdir="${TF_DIR}" output -raw compressor_irsa_arn)
@@ -63,9 +64,11 @@ sedi "s|REPLACE_WITH_ECR_URI/digital-library/worker:latest|${WORKER_ECR}:${IMAGE
 
 # ─── 4. ConfigMaps ────────────────────────────────────────────────────────────
 
-sedi "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_URL}|g" "${RENDERED_DIR}/compressor/configmap.yaml"
-sedi "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_URL}|g" "${RENDERED_DIR}/worker/configmap.yaml"
-sedi "s|REPLACE_WITH_DB_HOST|${DB_HOST}|g"        "${RENDERED_DIR}/worker/configmap.yaml"
+sedi "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_URL}|g"       "${RENDERED_DIR}/compressor/configmap.yaml"
+sedi "s|REPLACE_WITH_S3_BUCKET_NAME|${S3_BUCKET}|g"   "${RENDERED_DIR}/compressor/configmap.yaml"
+sedi "s|REPLACE_WITH_SQS_QUEUE_URL|${SQS_URL}|g"       "${RENDERED_DIR}/worker/configmap.yaml"
+sedi "s|REPLACE_WITH_S3_BUCKET_NAME|${S3_BUCKET}|g"   "${RENDERED_DIR}/worker/configmap.yaml"
+sedi "s|REPLACE_WITH_DB_HOST|${DB_HOST}|g"             "${RENDERED_DIR}/worker/configmap.yaml"
 
 # ─── 5. ServiceAccounts (IRSA annotations) ────────────────────────────────────
 

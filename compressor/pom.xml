@@ -53,6 +53,12 @@
             <artifactId>sts</artifactId>
         </dependency>
 
+        <!-- S3 client — compressor uploads compressed bytes, sends S3 key to SQS -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
+
         <!-- RabbitMQ (active in 'local' Spring profile — docker-compose local dev) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

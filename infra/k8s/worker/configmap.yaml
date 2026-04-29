@@ -13,6 +13,9 @@ data:
   # SQS queue URL to consume from
   SQS_QUEUE_URL: "REPLACE_WITH_SQS_QUEUE_URL"
 
+  # S3 bucket for transient compressed book storage (worker downloads and deletes)
+  S3_BUCKET_NAME: "REPLACE_WITH_S3_BUCKET_NAME"
+
   # RDS MySQL hostname (from terraform output db_endpoint)
   DB_HOST: "REPLACE_WITH_DB_HOST"
 

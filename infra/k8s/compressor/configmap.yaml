@@ -11,6 +11,9 @@ data:
   # SQS queue URL where compressed books are published
   SQS_QUEUE_URL: "REPLACE_WITH_SQS_QUEUE_URL"
 
+  # S3 bucket for transient compressed book storage (compressor uploads, worker deletes)
+  S3_BUCKET_NAME: "REPLACE_WITH_S3_BUCKET_NAME"
+
   # Spring profile — activates SQS + MySQL configuration (see application-aws.yml)
   SPRING_PROFILES_ACTIVE: "aws"
 

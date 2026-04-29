@@ -37,3 +37,8 @@ variable "hosted_zone_id" {
   description = "Route 53 hosted zone ID — scopes the external-dns write permission to this zone only"
   type        = string
 }
+
+variable "s3_bucket_arn" {
+  description = "ARN of the S3 bucket used for transient compressed book storage"
+  type        = string
+}
