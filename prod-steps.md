@@ -234,6 +234,8 @@ helm repo update
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --create-namespace \
+  --set grafana.persistence.enabled=false \
+  --set prometheus.prometheusSpec.storageSpec=null \
   --values infra/helm/monitoring/values.yaml
 
 kubectl rollout status deployment/kube-prometheus-stack-grafana -n monitoring --timeout=180s
@@ -269,6 +271,34 @@ kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitorin
 
 Verify all three app targets appear as UP in Prometheus at http://localhost:9090/targets
 under `serviceMonitor/digital-library/compressor`, `worker`, and `frontend`.
+
+### Grafana dashboards
+
+**JVM (Micrometer) — pre-loaded (ID 11378):**
+Dashboards → Browse → default → JVM (Micrometer) — heap, GC, HTTP rate, threads for compressor and worker.
+
+**Node Exporter Full — import manually (ID 1860):**
+Dashboards → New → Import → enter `1860` → Load → select Prometheus datasource → Import.
+Gives CPU, memory, disk, and network per EKS node.
+
+**Useful Prometheus queries (Explore tab):**
+
+```
+# Node CPU usage %
+100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+
+# Node memory usage %
+100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+
+# Node memory used (GB)
+(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1024 / 1024 / 1024
+
+# JVM heap used per service
+jvm_memory_used_bytes{area="heap"}
+
+# nginx active connections (frontend)
+nginx_connections_active
+```
 
 ---
 
