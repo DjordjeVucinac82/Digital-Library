@@ -198,6 +198,35 @@ Deploys `kube-prometheus-stack` into a dedicated `monitoring` namespace. Install
 - **node-exporter** — DaemonSet providing host-level CPU, memory, disk metrics per EKS node
 - **kube-state-metrics** — Deployment, Pod, HPA, PDB state metrics
 
+### Prerequisite: EBS CSI Driver
+
+`values.yaml` uses PersistentVolumeClaims (Prometheus 10Gi, Grafana 1Gi) backed by EBS gp2 volumes.
+The EBS CSI driver must be installed as an EKS add-on for PVCs to bind.
+
+```bash
+CLUSTER_NAME=$(terraform -chdir=infra/environments/prod output -raw cluster_name)
+
+aws eks create-addon \
+  --cluster-name ${CLUSTER_NAME} \
+  --addon-name aws-ebs-csi-driver \
+  --region eu-central-1 \
+  --profile Digital-Library
+
+# Wait ~2 min for the add-on to become ACTIVE
+aws eks describe-addon \
+  --cluster-name ${CLUSTER_NAME} \
+  --addon-name aws-ebs-csi-driver \
+  --region eu-central-1 \
+  --profile Digital-Library \
+  --query 'addon.status'
+```
+
+> **Skip persistence (dev/demo only):** If you don't need metrics to survive pod restarts,
+> add `--set grafana.persistence.enabled=false --set prometheus.prometheusSpec.storageSpec=null`
+> to the `helm install` command below. No EBS CSI driver needed in that case.
+
+### Install the chart
+
 ```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
@@ -211,13 +240,24 @@ kubectl rollout status deployment/kube-prometheus-stack-grafana -n monitoring --
 kubectl rollout status statefulset/prometheus-kube-prometheus-stack-prometheus -n monitoring --timeout=300s
 ```
 
-Apply the ServiceMonitor resources (tell Prometheus which app services to scrape):
+If pods are stuck in `Pending`, check whether PVCs are bound:
+
+```bash
+kubectl get pvc -n monitoring
+kubectl get pods -n monitoring
+```
+
+A `Pending` PVC means the EBS CSI driver is missing — install it (see Prerequisite above).
+
+### Apply ServiceMonitor resources
+
+ServiceMonitor CRDs are installed by the Helm chart above. Apply them after the chart is up:
 
 ```bash
 kubectl apply -f infra/k8s/monitoring/
 ```
 
-Access Grafana and Prometheus locally via port-forward:
+### Access locally via port-forward
 
 ```bash
 # Grafana — http://localhost:3001  (login: admin / digital-library-grafana)
