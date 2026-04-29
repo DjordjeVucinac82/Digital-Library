@@ -54,9 +54,10 @@
         </dependency>
 
         <!-- S3 client — compressor uploads compressed bytes, sends S3 key to SQS -->
+        <!-- spring-cloud-aws-starter-s3 auto-configures the S3Client bean (raw awssdk:s3 does not) -->
         <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>s3</artifactId>
+            <groupId>io.awspring.cloud</groupId>
+            <artifactId>spring-cloud-aws-starter-s3</artifactId>
         </dependency>
 
         <!-- RabbitMQ (active in 'local' Spring profile — docker-compose local dev) -->
