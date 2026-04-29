@@ -28,10 +28,10 @@ jobs:
       frontend_tag: ${{ steps.meta.outputs.frontend_tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -49,21 +49,21 @@ jobs:
           echo "frontend_tag=${{ env.ECR_REGISTRY }}/frontend:${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push compressor
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./compressor
           push: true
           tags: ${{ steps.meta.outputs.compressor_tag }}
 
       - name: Build and push worker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./worker
           push: true
           tags: ${{ steps.meta.outputs.worker_tag }}
 
       - name: Build and push frontend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./frontend
           push: true
@@ -76,17 +76,17 @@ jobs:
     environment: ${{ github.event.inputs.environment || 'dev' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy compressor to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: infra/environments/${{ github.event.inputs.environment || 'dev' }}/compressor-task-def.json
           service: compressor
@@ -94,7 +94,7 @@ jobs:
           wait-for-service-stability: true
 
       - name: Deploy worker to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: infra/environments/${{ github.event.inputs.environment || 'dev' }}/worker-task-def.json
           service: worker
