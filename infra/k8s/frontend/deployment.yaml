@@ -1,0 +1,70 @@
+# Frontend Deployment — nginx serves the React SPA and proxies /api/* to compressor.
+#
+# Node placement: public subnets (nodeSelector: role=frontend).
+# Pod anti-affinity ensures the two pods land on different nodes — if one node
+# fails, the frontend stays available on the other.
+#
+# BEFORE APPLYING: replace REPLACE_WITH_ECR_URI with your actual ECR registry URI.
+# The CD pipeline (cd.yml) updates the image tag on every deploy automatically.
+# Get the URI: terraform -chdir=infra/environments/dev output ecr_repository_urls
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: digital-library
+  labels:
+    app: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      # Run frontend pods on the public-subnet node group
+      nodeSelector:
+        role: frontend
+
+      # Spread the two pods across different nodes for availability
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [frontend]
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: frontend
+          # Replace with actual ECR URI — the CD pipeline keeps this updated
+          image: REPLACE_WITH_ECR_URI/digital-library/frontend:latest
+
+          ports:
+            - containerPort: 80
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30

@@ -1,0 +1,17 @@
+# Local profile — active in docker-compose (SPRING_PROFILES_ACTIVE=local).
+# Uses RabbitMQ as the message broker (matches docker-compose.yml service name).
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+
+  # Disable SQS auto-configuration — SQS requires AWS credentials which aren't
+  # available in local Docker. Without this, the SQS client throws on startup.
+  cloud:
+    aws:
+      sqs:
+        enabled: false
+      credentials:
+        use-default-aws-credentials-chain: false

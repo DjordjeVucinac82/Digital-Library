@@ -1,0 +1,31 @@
+# AWS profile — active in EKS (SPRING_PROFILES_ACTIVE=aws).
+# Uses RDS MySQL for storage and SQS for message consumption.
+# DB credentials come from the worker-db-secret Kubernetes Secret (see INSTRUCTIONS.md).
+spring:
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:eu-central-1}
+
+  datasource:
+    # DB_HOST is injected via K8s ConfigMap; DB_USER and DB_PASS from K8s Secret
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT:3306}/${DB_NAME:library}?useSSL=true&requireSSL=true
+    username: ${DB_USER}
+    password: ${DB_PASS}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+
+  # Disable RabbitMQ auto-configuration — not used in AWS
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+app:
+  sqs:
+    # Injected via K8s ConfigMap — see infra/k8s/worker/configmap.yaml
+    queue-url: ${SQS_QUEUE_URL}

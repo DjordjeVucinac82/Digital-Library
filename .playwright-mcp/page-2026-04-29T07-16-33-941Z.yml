@@ -1,0 +1,16 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]: Zühlke · Digital Archive
+    - heading "Digital Library" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Submit a PDF to add it to the collection
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - button "Upload PDF" [active] [ref=e10] [cursor=pointer]:
+        - generic:
+          - generic:
+            - img
+          - generic:
+            - text: Drop a PDF here or
+            - emphasis: click to browse
+      - button "Submit" [disabled] [ref=e11]
+  - contentinfo [ref=e12]: PDF files only · Max 50 MB

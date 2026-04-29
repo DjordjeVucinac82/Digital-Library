@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: digital-library
+  labels:
+    name: digital-library
+    app.kubernetes.io/managed-by: kubectl

@@ -1,0 +1,92 @@
+# Worker Deployment — consumes from SQS, persists compressed books to RDS MySQL.
+#
+# Node placement: private subnets (nodeSelector: role=backend).
+# DB credentials come from the worker-db-secret Kubernetes Secret,
+# which is populated manually from AWS Secrets Manager (see INSTRUCTIONS.md step 7).
+#
+# BEFORE APPLYING: replace REPLACE_WITH_ECR_URI with actual ECR registry URI.
+# Get it: terraform -chdir=infra/environments/dev output ecr_repository_urls
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: digital-library
+  labels:
+    app: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      # Use the IRSA-annotated ServiceAccount for SQS receive + Secrets Manager permissions
+      serviceAccountName: worker
+
+      # Run on the private-subnet backend node group
+      nodeSelector:
+        role: backend
+
+      # Spread pods across different nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [worker]
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: worker
+          image: REPLACE_WITH_ECR_URI/digital-library/worker:latest
+
+          ports:
+            - containerPort: 8082
+
+          # Non-secret config (SQS URL, DB host, profile)
+          envFrom:
+            - configMapRef:
+                name: worker-config
+
+          # DB credentials from Kubernetes Secret (populated from Secrets Manager)
+          # See INSTRUCTIONS.md step 7 for how to create this Secret
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: worker-db-secret
+                  key: DB_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: worker-db-secret
+                  key: DB_PASS
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3

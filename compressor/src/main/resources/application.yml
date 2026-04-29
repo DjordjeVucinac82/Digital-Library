@@ -1,11 +1,12 @@
 spring:
   application:
     name: compressor
-  rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER:guest}
-    password: ${RABBITMQ_PASS:guest}
+
+  # Activate 'aws' profile by default (SQS + remote broker).
+  # docker-compose overrides this with SPRING_PROFILES_ACTIVE=local to use RabbitMQ.
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:aws}
+
   servlet:
     multipart:
       max-file-size: 50MB

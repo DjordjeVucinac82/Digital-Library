@@ -1,0 +1,18 @@
+# AWS profile — active in EKS (SPRING_PROFILES_ACTIVE=aws).
+# SQS is auto-configured by spring-cloud-aws-starter-sqs.
+# Credentials are provided by IRSA (no access keys needed in pods).
+spring:
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:eu-central-1}
+
+  # Disable RabbitMQ auto-configuration — not used in AWS
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+app:
+  sqs:
+    # Injected via K8s ConfigMap — see infra/k8s/compressor/configmap.yaml
+    queue-url: ${SQS_QUEUE_URL}

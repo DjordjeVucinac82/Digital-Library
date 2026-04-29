@@ -21,6 +21,19 @@
         <java.version>17</java.version>
     </properties>
 
+    <!-- Spring Cloud AWS BOM ensures compatible versions with Spring Boot 3.2 -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.awspring.cloud</groupId>
+                <artifactId>spring-cloud-aws-dependencies</artifactId>
+                <version>3.2.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <!-- REST API -->
         <dependency>
@@ -28,13 +41,19 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- RabbitMQ (local dev) — swapped for SQS client in AWS -->
+        <!-- AWS SQS (active in 'aws' Spring profile — EKS deployment) -->
+        <dependency>
+            <groupId>io.awspring.cloud</groupId>
+            <artifactId>spring-cloud-aws-starter-sqs</artifactId>
+        </dependency>
+
+        <!-- RabbitMQ (active in 'local' Spring profile — docker-compose local dev) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
-        <!-- Health checks and metrics (used by CloudWatch / ALB) -->
+        <!-- Health checks and metrics (used by ALB health checks and CloudWatch) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>

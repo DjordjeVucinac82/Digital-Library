@@ -1,21 +1,11 @@
 spring:
   application:
     name: worker
-  rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER:guest}
-    password: ${RABBITMQ_PASS:guest}
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:library}
-    username: ${DB_USER:library}
-    password: ${DB_PASS:library}
-    driver-class-name: org.postgresql.Driver
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  # Activate 'aws' profile by default (SQS + MySQL).
+  # docker-compose overrides this with SPRING_PROFILES_ACTIVE=local (RabbitMQ + PostgreSQL).
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:aws}
 
 server:
   port: 8082

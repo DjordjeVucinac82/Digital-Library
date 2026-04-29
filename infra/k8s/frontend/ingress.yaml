@@ -1,0 +1,57 @@
+# Ingress — tells the AWS Load Balancer Controller to create an internet-facing ALB.
+#
+# The ALB routes all traffic to the frontend service (nginx).
+# nginx then:
+#   - Serves React static files for /
+#   - Proxies /api/* to the compressor service (ClusterIP, never exposed externally)
+#
+# Prerequisites:
+#   - AWS Load Balancer Controller must be installed in the cluster (see INSTRUCTIONS.md)
+#   - external-dns must be installed in the cluster (see INSTRUCTIONS.md)
+#   - Public subnets must be tagged with kubernetes.io/role/elb = 1
+#   - Replace REPLACE_WITH_CERT_ARN and REPLACE_WITH_APP_DOMAIN before applying (see INSTRUCTIONS.md step 10)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: digital-library
+  annotations:
+    # Tell Kubernetes which controller handles this Ingress
+    kubernetes.io/ingress.class: alb
+
+    # Create an internet-facing ALB (not internal)
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    # IP mode: routes traffic directly to pod IPs (more efficient than instance mode)
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # Health check path — ALB checks this before routing traffic
+    alb.ingress.kubernetes.io/healthcheck-path: /
+
+    # Return 200 or redirect as healthy
+    alb.ingress.kubernetes.io/success-codes: "200,301,302"
+
+    # TLS certificate from ACM — get the ARN from `terraform output certificate_arn`
+    alb.ingress.kubernetes.io/certificate-arn: REPLACE_WITH_CERT_ARN
+
+    # Listen on both HTTP (80) and HTTPS (443)
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+
+    # Redirect all HTTP traffic to HTTPS
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+
+    # external-dns reads this annotation and creates a Route 53 A ALIAS record
+    # pointing this domain to the ALB DNS name automatically
+    external-dns.alpha.kubernetes.io/hostname: REPLACE_WITH_APP_DOMAIN
+spec:
+  rules:
+    - host: REPLACE_WITH_APP_DOMAIN
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

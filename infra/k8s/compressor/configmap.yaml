@@ -1,0 +1,18 @@
+# ConfigMap for non-secret compressor environment variables.
+#
+# BEFORE APPLYING: replace REPLACE_WITH_SQS_QUEUE_URL with the actual URL.
+# Get it: terraform -chdir=infra/environments/dev output sqs_queue_url
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: compressor-config
+  namespace: digital-library
+data:
+  # SQS queue URL where compressed books are published
+  SQS_QUEUE_URL: "REPLACE_WITH_SQS_QUEUE_URL"
+
+  # Spring profile — activates SQS + MySQL configuration (see application-aws.yml)
+  SPRING_PROFILES_ACTIVE: "aws"
+
+  # AWS region for the SQS client
+  AWS_REGION: "eu-central-1"

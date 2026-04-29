@@ -13,45 +13,73 @@ This workspace is for preparing a final technical interview at Zühlke (DevOps/C
 ### Application flow
 
 ```
-Employees → Library Portal (React) → Compressor (Java) → Message Broker → Worker (Java) → Database (binary)
+Employees → Library Portal (React) → Compressor (Java) → SQS → Worker (Java) → RDS MySQL
 ```
 
-- **Library Portal** (`frontend/`): React/Vite app — employees upload PDF books, served via nginx
-- **Compressor** (`compressor/`): Spring Boot on port 8081 — receives PDFs via REST, GZIP-compresses them, publishes to `books.compressed` queue
-- **Worker** (`worker/`): Spring Boot on port 8082 — listens on queue, persists compressed binary to PostgreSQL
-- **Message Broker**: RabbitMQ locally → Amazon SQS in AWS
-- **Database**: PostgreSQL locally → Amazon RDS in AWS
+- **Library Portal** (`frontend/`): React/Vite app — employees upload PDF books, served via nginx (port 80)
+- **Compressor** (`compressor/`): Spring Boot on port 8081 — receives PDFs via REST, GZIP-compresses them, publishes to SQS. nginx reverse-proxies `/api/*` to compressor from the frontend pod.
+- **Worker** (`worker/`): Spring Boot on port 8082 — consumes from SQS, persists compressed binary to RDS MySQL
+- **Message Broker**: RabbitMQ locally (`local` Spring profile) → Amazon SQS in AWS (`aws` Spring profile)
+- **Database**: PostgreSQL locally → Amazon RDS MySQL in AWS
+
+### Spring profiles
+
+| Profile | Broker | Database | When active |
+|---|---|---|---|
+| `aws` (default) | SQS | RDS MySQL | EKS deployment |
+| `local` | RabbitMQ | PostgreSQL | docker-compose |
 
 ### Non-functional requirements (from the brief)
 
-- **Infrastructure as Code** is a de facto standard — all resources must be managed via IaC (Terraform)
-- **Observability** — systems should be observable at every handshake (every service boundary must emit logs/metrics/traces)
-- **Scalability** is part of the business model:
-  - Solution must be cost effective
-  - Infrastructure should scale up during high volumes and scale down during low volumes, and be performant while doing so
-- **Quality assurance** is business critical
+- **Infrastructure as Code** — all resources managed via Terraform
+- **Observability** — every service boundary emits logs/metrics via Spring Actuator
+- **Scalability** — cost-effective, scales up/down; 2 replicas per service in K8s
+- **Quality assurance** — unit tests for all business logic
 
 ## Repository Structure
 
 ```
 Zuhlke-library/
-├── frontend/           # React/Vite — Library Portal
-├── compressor/         # Java/Spring Boot — PDF compressor microservice
-├── worker/             # Java/Spring Boot — DB writer microservice
-├── infra/              # Terraform (to be built out)
-│   ├── environments/   # dev / test / prod tfvars
-│   └── modules/        # ecs, sqs, rds, s3, alb
+├── frontend/                   # React/Vite — Library Portal (nginx reverse proxy)
+├── compressor/                 # Java/Spring Boot — PDF compressor
+│   └── src/main/resources/
+│       ├── application.yml          # base config + profile selector
+│       ├── application-aws.yml      # SQS config (EKS)
+│       └── application-local.yml    # RabbitMQ config (docker-compose)
+├── worker/                     # Java/Spring Boot — DB writer
+│   └── src/main/resources/
+│       ├── application.yml
+│       ├── application-aws.yml      # SQS + MySQL config (EKS)
+│       └── application-local.yml    # RabbitMQ + PostgreSQL config (docker-compose)
+├── infra/
+│   ├── bootstrap/              # S3 + DynamoDB for TF state (apply once)
+│   ├── modules/
+│   │   ├── vpc/                # VPC, subnets, IGW, NAT GW, route tables
+│   │   ├── eks/                # EKS cluster, 2 node groups, OIDC provider
+│   │   ├── ecr/                # ECR repositories (frontend, compressor, worker)
+│   │   ├── iam/                # IRSA roles + node role + LB controller role
+│   │   ├── rds/                # RDS MySQL + Secrets Manager password
+│   │   └── sqs/                # SQS queue + DLQ
+│   ├── environments/
+│   │   ├── dev/                # dev tfvars + provider.tf (S3 backend)
+│   │   └── prod/               # prod tfvars + provider.tf (S3 backend)
+│   └── k8s/                    # Kubernetes manifests
+│       ├── namespace.yaml
+│       ├── frontend/           # Deployment, Service, Ingress (ALB)
+│       ├── compressor/         # ServiceAccount (IRSA), ConfigMap, Deployment, Service
+│       └── worker/             # ServiceAccount (IRSA), ConfigMap, Deployment, Service
 ├── .github/workflows/
-│   ├── ci.yml          # build + test all three services on every push
-│   └── cd.yml          # build Docker images, push to ECR, deploy to ECS Fargate
-└── docker-compose.yml  # full local stack (RabbitMQ + PostgreSQL + all services)
+│   ├── ci.yml                  # build + test all three services on every push
+│   └── cd.yml                  # build Docker images, push to ECR, deploy to EKS
+├── INSTRUCTIONS.md             # full deployment guide (bootstrap → running in prod)
+└── docker-compose.yml          # full local stack (RabbitMQ + PostgreSQL + all services)
 ```
 
 ## Commands
 
 ### Local development (all services together)
 ```bash
-docker-compose up --build          # start full stack
+docker-compose up --build          # start full stack (local Spring profile, RabbitMQ + PostgreSQL)
 docker-compose down -v             # stop and remove volumes
 ```
 
@@ -63,8 +91,8 @@ Worker API: http://localhost:8082/actuator/health
 ### Compressor microservice
 ```bash
 cd compressor
-mvn verify                         # build + run tests
-mvn spring-boot:run                # run locally (needs RabbitMQ on localhost:5672)
+mvn verify                              # build + run tests
+mvn spring-boot:run                     # run locally (needs RabbitMQ on localhost:5672)
 mvn test -Dtest=CompressorServiceTest   # run single test class
 ```
 
@@ -72,7 +100,7 @@ mvn test -Dtest=CompressorServiceTest   # run single test class
 ```bash
 cd worker
 mvn verify
-mvn spring-boot:run                # needs RabbitMQ + PostgreSQL
+mvn spring-boot:run                     # needs RabbitMQ + PostgreSQL (local profile)
 mvn test -Dtest=BookStorageServiceTest
 ```
 
@@ -84,32 +112,82 @@ npm run dev                        # Vite dev server on http://localhost:5173
 npm run build                      # production build to dist/
 ```
 
+### Terraform (see INSTRUCTIONS.md for full sequence)
+```bash
+# Bootstrap — run once
+cd infra/bootstrap && terraform init && terraform apply
+
+# Dev environment
+cd infra/environments/dev
+terraform init && terraform plan && terraform apply
+terraform output                   # get ECR URLs, SQS URL, DB host, IRSA ARNs
+
+# Prod environment
+cd infra/environments/prod
+terraform init && terraform plan && terraform apply
+```
+
+### Kubernetes
+```bash
+# Configure kubectl
+aws eks update-kubeconfig --name digital-library-dev --region eu-central-1 --profile Digital-Library
+
+# Apply manifests (see INSTRUCTIONS.md step 10 for filling in REPLACE_WITH_* placeholders)
+kubectl apply -f infra/k8s/namespace.yaml
+kubectl apply -f infra/k8s/compressor/serviceaccount.yaml
+kubectl apply -f infra/k8s/worker/serviceaccount.yaml
+kubectl apply -f infra/k8s/
+
+# Check pod status
+kubectl get pods -n digital-library
+
+# Get ALB URL
+kubectl get ingress frontend -n digital-library
+```
+
 ## Architecture Decisions
 
-**Why monorepo**: single CI/CD pipeline, easier to demo full system in one repo for the interview scope. In production with multiple teams, would split into per-service repos for independent release cycles.
+**Why EKS over ECS Fargate**: EKS gives fine-grained pod placement (frontend in public subnets, backend in private), native Kubernetes ecosystem (Helm, Ingress, IRSA), and is better for interview demonstration of Kubernetes skills. ECS Fargate has lower operational overhead and scales to zero — preferred for a genuine startup; EKS makes sense here for the demo and learning goals.
 
-**Local broker (RabbitMQ) → AWS (SQS)**: The `application.yml` in both services uses environment variables for broker connection. In AWS, the `@RabbitListener` in Worker is replaced with Spring Cloud AWS `@SqsListener` — the service logic stays identical.
+**Two environments (dev + prod)**: test environment removed to save cost (~$72/month per EKS control plane). Dev uses spot instances and a single NAT gateway; prod uses on-demand and Multi-AZ for HA.
 
-**ECS Fargate over EKS**: lower operational overhead, no control plane to manage, scales to zero, better cost profile for startup scale (10–20 users/day initially). EKS makes sense when you need custom scheduling or have 10+ services.
+**Spring profiles for broker/DB selection**: `aws` profile (default) activates SQS + MySQL; `local` profile activates RabbitMQ + PostgreSQL. docker-compose sets `SPRING_PROFILES_ACTIVE=local`. No code changes needed between environments — only configuration.
 
-**Multi-stage Dockerfiles**: dependency layer is cached separately from source layer — significantly faster CI rebuilds when only source changes.
+**MessagePublisher interface** (compressor): isolates the broker from business logic. `SqsMessagePublisher` (@Profile=aws) and `RabbitMessagePublisher` (@Profile=local) implement the interface. Tests mock the interface, not the broker client.
+
+**nginx reverse proxy** (frontend): nginx serves the React SPA and proxies `/api/*` to the compressor ClusterIP service. This means only one ALB is needed (port 80 → frontend), and the compressor is never directly exposed to the internet.
+
+**Custom domains via external-dns**: `444noresponse.com` (prod) and `dev.444noresponse.com` (dev) point to their respective ALBs via Route 53. external-dns runs in `kube-system`, watches the Ingress `external-dns.alpha.kubernetes.io/hostname` annotation, and automatically creates/removes Route 53 A ALIAS records. ACM certificates are provisioned by Terraform (DNS-validated against the same hosted zone `Z0414591K81BU1BVJ424`). The ALB is configured to redirect HTTP → HTTPS.
+
+**IRSA (IAM Roles for Service Accounts)**: each pod has only the permissions it needs. Compressor → SQS send only. Worker → SQS receive + Secrets Manager read. Credentials are short-lived tokens, never stored in environment variables or Kubernetes Secrets.
+
+**DB password in Secrets Manager**: Terraform generates a random password, stores it in Secrets Manager, and passes it to RDS. INSTRUCTIONS.md step 8 documents pulling the secret to create the K8s Secret. For production, use External Secrets Operator to automate this sync.
+
+**Multi-stage Dockerfiles**: dependency layer cached separately from source — faster CI rebuilds when only source changes.
 
 ## The 3 Interview Deliverables
 
-1. **Cloud architecture** — AWS service mapping, security, observability
-2. **Environment model** — how dev/test/prod are separated (AWS accounts vs VPCs)
-3. **CI/CD pipeline** — tool choices, promotion strategy, quality gates, rollback
+1. **Cloud architecture** — EKS cluster, VPC with public/private subnets, ALB, SQS, RDS MySQL, ECR, IAM/IRSA
+2. **Environment model** — dev (spot, single-AZ, 1 NAT GW) vs prod (on-demand, Multi-AZ, 2 NAT GWs), separate VPCs, shared ECR
+3. **CI/CD pipeline** — GitHub Actions → ECR push → `kubectl set image` → rollout status; Terraform applied manually per environment
 
 ## AWS Credentials
 
-**Local development**: uses the `Digital-Library` profile from `~/.aws/credentials`. Terraform picks this up automatically via `provider.tf`. AWS CLI commands should use `--profile Digital-Library` or `export AWS_PROFILE=Digital-Library`.
+**Local development**: uses the `Digital-Library` profile from `~/.aws/credentials`. Terraform and AWS CLI use `--profile Digital-Library`.
 
-**CI/CD (GitHub Actions)**: uses IAM credentials injected as environment variables — these override the profile in `provider.tf`.
+**CI/CD (GitHub Actions)**: `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` env vars override the profile.
 
 ## CI/CD Secrets Required (GitHub → Settings → Secrets)
 
 | Secret | Value |
 |---|---|
-| `AWS_ACCOUNT_ID` | your AWS account ID |
-| `AWS_ACCESS_KEY_ID` | IAM user with ECR push + ECS deploy permissions |
+| `AWS_ACCOUNT_ID` | your 12-digit AWS account ID |
+| `AWS_ACCESS_KEY_ID` | IAM user with ECR push + EKS describe permissions |
 | `AWS_SECRET_ACCESS_KEY` | matching secret |
+
+## Documentation Files
+
+| File | Purpose |
+|---|---|
+| `CLAUDE.md` | Architecture decisions, repo structure, commands |
+| `INSTRUCTIONS.md` | Step-by-step deployment guide (bootstrap → running in prod) |

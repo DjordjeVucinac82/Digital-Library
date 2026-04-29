@@ -1,0 +1,29 @@
+# ConfigMap for non-secret worker environment variables.
+#
+# BEFORE APPLYING: replace REPLACE_WITH_* values with terraform outputs.
+# Get them:
+#   terraform -chdir=infra/environments/dev output sqs_queue_url
+#   terraform -chdir=infra/environments/dev output db_endpoint
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: worker-config
+  namespace: digital-library
+data:
+  # SQS queue URL to consume from
+  SQS_QUEUE_URL: "REPLACE_WITH_SQS_QUEUE_URL"
+
+  # RDS MySQL hostname (from terraform output db_endpoint)
+  DB_HOST: "REPLACE_WITH_DB_HOST"
+
+  # MySQL port (default 3306)
+  DB_PORT: "3306"
+
+  # Database schema name
+  DB_NAME: "library"
+
+  # Spring profile — activates SQS + MySQL configuration (see application-aws.yml)
+  SPRING_PROFILES_ACTIVE: "aws"
+
+  # AWS region for the SQS client
+  AWS_REGION: "eu-central-1"

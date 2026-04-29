@@ -1,0 +1,28 @@
+# Local profile — active in docker-compose (SPRING_PROFILES_ACTIVE=local).
+# Uses PostgreSQL and RabbitMQ (matching docker-compose.yml service configuration).
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:library}
+    username: ${DB_USER:library}
+    password: ${DB_PASS:library}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  # Disable SQS auto-configuration — SQS requires AWS credentials not available locally
+  cloud:
+    aws:
+      sqs:
+        enabled: false
+      credentials:
+        use-default-aws-credentials-chain: false

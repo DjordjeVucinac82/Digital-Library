@@ -1,0 +1,78 @@
+# Compressor Deployment — receives PDF uploads, GZIP-compresses them, publishes to SQS.
+#
+# Node placement: private subnets (nodeSelector: role=backend).
+# Receives traffic from nginx (frontend pod) via the compressor ClusterIP service.
+# Never exposed directly to the internet.
+#
+# BEFORE APPLYING: replace REPLACE_WITH_ECR_URI with actual ECR registry URI.
+# Get it: terraform -chdir=infra/environments/dev output ecr_repository_urls
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compressor
+  namespace: digital-library
+  labels:
+    app: compressor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: compressor
+  template:
+    metadata:
+      labels:
+        app: compressor
+    spec:
+      # Use the IRSA-annotated ServiceAccount for SQS send permissions
+      serviceAccountName: compressor
+
+      # Run on the private-subnet backend node group
+      nodeSelector:
+        role: backend
+
+      # Spread pods across different nodes
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values: [compressor]
+              topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: compressor
+          image: REPLACE_WITH_ECR_URI/digital-library/compressor:latest
+
+          ports:
+            - containerPort: 8081
+
+          # Load non-secret config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: compressor-config
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3

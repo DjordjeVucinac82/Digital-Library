@@ -1,9 +1,9 @@
-name: CD — Deploy to AWS
+name: CD — Deploy to AWS EKS
 
 on:
   push:
     branches:
-      - main   # deploys to dev/test automatically
+      - main   # auto-deploys to dev on every merge
   workflow_dispatch:
     inputs:
       environment:
@@ -11,7 +11,7 @@ on:
         required: true
         default: dev
         type: choice
-        options: [dev, test, prod]
+        options: [dev, prod]
 
 env:
   AWS_REGION: eu-central-1
@@ -19,19 +19,18 @@ env:
 
 jobs:
 
+  # ─── Build Docker images and push to ECR ────────────────────────────────────
   build-and-push:
-    name: Build Docker images & push to ECR
+    name: Build & push Docker images to ECR
     runs-on: ubuntu-latest
     outputs:
-      compressor_tag: ${{ steps.meta.outputs.compressor_tag }}
-      worker_tag: ${{ steps.meta.outputs.worker_tag }}
-      frontend_tag: ${{ steps.meta.outputs.frontend_tag }}
+      image_tag: ${{ steps.tag.outputs.image_tag }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -41,62 +40,92 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set image tag
-        id: meta
-        run: |
-          TAG=${{ github.sha }}
-          echo "compressor_tag=${{ env.ECR_REGISTRY }}/compressor:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "worker_tag=${{ env.ECR_REGISTRY }}/worker:${TAG}" >> "$GITHUB_OUTPUT"
-          echo "frontend_tag=${{ env.ECR_REGISTRY }}/frontend:${TAG}" >> "$GITHUB_OUTPUT"
+        id: tag
+        run: echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push compressor
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: ./compressor
           push: true
-          tags: ${{ steps.meta.outputs.compressor_tag }}
+          tags: ${{ env.ECR_REGISTRY }}/digital-library/compressor:${{ github.sha }}
 
       - name: Build and push worker
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: ./worker
           push: true
-          tags: ${{ steps.meta.outputs.worker_tag }}
+          tags: ${{ env.ECR_REGISTRY }}/digital-library/worker:${{ github.sha }}
 
       - name: Build and push frontend
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: true
-          tags: ${{ steps.meta.outputs.frontend_tag }}
+          tags: ${{ env.ECR_REGISTRY }}/digital-library/frontend:${{ github.sha }}
 
+  # ─── Deploy to EKS via kubectl ───────────────────────────────────────────────
   deploy:
-    name: Deploy to ECS Fargate (${{ github.event.inputs.environment || 'dev' }})
+    name: Deploy to EKS (${{ github.event.inputs.environment || 'dev' }})
     runs-on: ubuntu-latest
     needs: build-and-push
     environment: ${{ github.event.inputs.environment || 'dev' }}
 
+    env:
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy compressor to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: infra/environments/${{ github.event.inputs.environment || 'dev' }}/compressor-task-def.json
-          service: compressor
-          cluster: digital-library-${{ github.event.inputs.environment || 'dev' }}
-          wait-for-service-stability: true
+      # Downloads kubeconfig for the target EKS cluster
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig \
+            --name digital-library-${{ env.ENVIRONMENT }} \
+            --region ${{ env.AWS_REGION }}
 
-      - name: Deploy worker to ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: infra/environments/${{ github.event.inputs.environment || 'dev' }}/worker-task-def.json
-          service: worker
-          cluster: digital-library-${{ github.event.inputs.environment || 'dev' }}
-          wait-for-service-stability: true
+      # Update the image tag for each deployment.
+      # kubectl set image only updates the image — all other manifest fields stay as-is.
+      - name: Update image tags
+        run: |
+          kubectl set image deployment/frontend \
+            frontend=${{ env.ECR_REGISTRY }}/digital-library/frontend:${{ env.IMAGE_TAG }} \
+            -n digital-library
+
+          kubectl set image deployment/compressor \
+            compressor=${{ env.ECR_REGISTRY }}/digital-library/compressor:${{ env.IMAGE_TAG }} \
+            -n digital-library
+
+          kubectl set image deployment/worker \
+            worker=${{ env.ECR_REGISTRY }}/digital-library/worker:${{ env.IMAGE_TAG }} \
+            -n digital-library
+
+      # Wait for rolling update to complete — fails the pipeline if pods don't become ready
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/frontend \
+            -n digital-library --timeout=300s
+
+          kubectl rollout status deployment/compressor \
+            -n digital-library --timeout=300s
+
+          kubectl rollout status deployment/worker \
+            -n digital-library --timeout=300s
+
+      # Print pod status and ALB URL for quick verification
+      - name: Verify deployment
+        run: |
+          echo "=== Pods ==="
+          kubectl get pods -n digital-library
+
+          echo "=== ALB URL ==="
+          kubectl get ingress frontend -n digital-library \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
